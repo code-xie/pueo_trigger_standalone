@@ -17,6 +17,8 @@
 #include <algorithm>
 #include <random>
 #include "TAxis.h" 
+#include "TH1D.h" 
+#include "TH1.h"
 
 
 
@@ -39,16 +41,10 @@ class PueoSimple {
   std::vector<TGraph> signals;
   std::vector<TGraph> signals_discrete;
 
-  PueoSimple();
+  PueoSimple(std::mt19937& gen, double snr);
 };
 
 
-
-
-
-
-//1. discretise.
-//take signals at all antennas and update the objects representing their bit-limited representations in the pueo object.
 void Digitize(PueoSimple* pueo1, int bits, double multiplier) {
   int digitise_max = pow(2,bits-1)-1;
   int digitise_min = -1 * digitise_max;
@@ -150,6 +146,7 @@ static void generate_beams_L1(std::vector<std::vector<int>> &L1_beams) {
 
 
 }
+
 
 ////first variable is vector, each element a vector representing an L2 beam, with 16 delay values in that vector
 ////second variable is vector, each element a vector representing an L1 beam, with corresponding L2 beams in that vector
@@ -303,10 +300,12 @@ void L1Trigger(PueoSimple* pueo1, std::vector<std::vector<int>> & L1_ants,std::v
       if (coherent_sum > threshold) {
         beam_triggered = true;
       }
-      if (coherent_sum > max_coherent) {
+      if (coherent_sum > max_coherent) { 
         max_coherent = coherent_sum;
         max_loc = wind_pos;
       }
+      
+
     }
 
   pueo1->L1_triggers.push_back(beam_triggered);
@@ -314,7 +313,6 @@ void L1Trigger(PueoSimple* pueo1, std::vector<std::vector<int>> & L1_ants,std::v
   pueo1->L1_max_loc.push_back(max_loc);
   }
 }
-
 
 
 //outputs boolean of L2 trigger; requires dfn of make up and relative delay between antennas for L2 beams
@@ -369,7 +367,6 @@ void L2Trigger(PueoSimple* pueo1, std::vector<std::vector<int>> & L2_ants,std::v
 }
 
 
-
 double e_field(double theta_offcone, double freq, double normalisation ) {
   if (freq < 1 || freq > 2000) {
     return 0;
@@ -381,6 +378,7 @@ double e_field(double theta_offcone, double freq, double normalisation ) {
     return ice_attenu * normalisation * sin(theta_view/180*M_PI) / sin(theta_cerenkov/180*M_PI)   * exp(-pow(theta_offcone/cone_width, 2)) * 2.53E-7 * freq / 1150 / (1+pow(freq / 1150,1.44));
   }
 }
+
 
 void visualiseFields() {
   std::vector<double> off_cone_angles = {0.1, 0.2, 0.5, 1.0, 2.0, 3.0, 6.0};
@@ -415,6 +413,7 @@ void visualiseFields() {
   mg->Draw("A pmc plc");
   c_fields->BuildLegend();
 }
+
 
 //std::array<double, 128> getSignal(double theta_offcone_deg, double expected_size) {
 double * getSignal(double theta_offcone_deg, int expected_size) {
@@ -514,7 +513,8 @@ double * getSignal(double theta_offcone_deg, int expected_size) {
   return signal_normalised;
 }
 
-double * generate_noise_flat(double norm, int size, double min_freq_Mhz, double max_freq_Mhz) {
+
+double * generate_noise_flat(double norm, int size, double min_freq_Mhz, double max_freq_Mhz, std::mt19937& gen) {
   int freq_bins = ceil(size / 2.0) + 1;
   double sample_freq_Mhz = 2949.12;
   double nyq_freq_Mhz = sample_freq_Mhz /2;
@@ -522,8 +522,8 @@ double * generate_noise_flat(double norm, int size, double min_freq_Mhz, double 
 
   std::complex<double> * freq_output = new std::complex<double>[freq_bins]; 
 
-  std::random_device rd;  // Will be used to obtain a seed for the random number engine
-  std::mt19937 gen(rd()); // Standard mersenne_twister_engine seeded with rd()
+  //std::random_device rd;  // Will be used to obtain a seed for the random number engine
+  //std::mt19937 gen(rd()); // Standard mersenne_twister_engine seeded with rd()
   std::uniform_real_distribution<> dis(0.0, 1.0);
 
   for (int f = 0; f < freq_bins; f++) {
@@ -557,11 +557,95 @@ double * generate_noise_flat(double norm, int size, double min_freq_Mhz, double 
   return noise_output;
 }
 
+
 double gaussian_pulse(double x, double c, double pos, double peak) { //x is sample count, pos is which sample is centre of signal, c is width in samples 
     return peak * exp(-pow((x - pos -c /2),2) / 2 / c /c) - peak * exp(-pow((x - pos + c /2),2) / 2 / c /c) ;
 }
 
-TGraph * signal_and_noise(double signal_short[], double noise[], int signal_size, int signal_loc, int size, double SNR, double multiplier, double freq_Ghz) {
+void evaluate_threshold(PueoSimple& pueo1, std::mt19937& gen, bool is_L2) {
+  
+
+  int bits = 4;
+  double multiplier = 2;
+  //std::vector<double> samples;
+  int n_samples = 512;
+  int repeats = 40000;
+
+  int number_ants = 8;
+  if (is_L2 == true) {
+    number_ants = 16;
+  }
+
+  TH1D *h1 = new TH1D("Histogram for coherent values","Histogram for coherent values",100,0.,5000.);
+
+  int digitise_max = pow(2,bits-1)-1;
+  int digitise_min = -1 * digitise_max;
+
+  double x[n_samples];
+  for (int i=0; i<n_samples; i++) {
+    x[i] = i;
+  }
+
+  double sample_padding = 64;
+  double n_sample_generated =  n_samples+sample_padding * 2;
+
+  for (int r=0; r< repeats ; r++) {
+    std::vector<TGraph> noise_tgraphs;
+    for (int i = 0 ; i < number_ants; i++) {
+    double * noise = generate_noise_flat(0.8343, n_sample_generated, 240, 1300, gen);
+    TGraph gr = TGraph (n_samples, x, noise);
+    
+    //digitise
+    for (int j=0; j<gr.GetN(); j++) {
+      int digitised_y;
+      double scaled_y = gr.GetPointY(j) * multiplier;
+
+      if (scaled_y > digitise_max) {
+        digitised_y = digitise_max;
+      } else if (scaled_y < digitise_min) {
+        digitised_y = digitise_min;
+      } else {
+        digitised_y = round(scaled_y);
+      }
+      
+      gr.SetPointY(j,digitised_y );
+    }
+    //add to vector of tgraphs
+    noise_tgraphs.push_back(gr); 
+    }
+
+    int step = 8;
+    int window = 16;
+    int max_shift = 64;
+
+
+    int max_coherent = 0;
+    for(int wind_pos=max_shift; wind_pos < n_samples - max_shift-window -16; wind_pos+=step) {
+      int coherent_sum = 0;
+      for (int samp_pos=0; samp_pos < window ; samp_pos +=1){
+        int coherent_sum_sample = 0;
+        for (int i_ant=0; i_ant<number_ants; i_ant+=1) {
+          coherent_sum_sample += noise_tgraphs.at(i_ant).GetPointY(wind_pos+samp_pos);
+        }
+        int coherent_sum_sqr_sample = coherent_sum_sample * coherent_sum_sample;
+        coherent_sum += coherent_sum_sqr_sample;
+      }
+      //samples.push_back(coherent_sum);
+      h1->Fill(coherent_sum);
+
+    }
+  }
+  
+
+  h1->Draw();
+  gPad->SetLogy();
+  
+} 
+
+
+
+
+TGraph * combine_signal_noise(double signal_short[], double noise[], int signal_size, int signal_loc, int size, double SNR, double multiplier, double freq_Ghz) {
 
   int size_fft = ceil(size / 2) + 1;
   if (signal_size + signal_loc > size) {
@@ -633,9 +717,8 @@ TGraph * signal_and_noise(double signal_short[], double noise[], int signal_size
 }
 
 
-
-PueoSimple::PueoSimple() {
-
+PueoSimple::PueoSimple(std::mt19937& gen, double snr) {
+  
 
   //choosing source
   double theta = 10.0 / 180.0 * M_PI;
@@ -671,16 +754,20 @@ PueoSimple::PueoSimple() {
   double sample_padding = 64;
   double n_sample_generated = n_samples+sample_padding * 2; //size of noise generated must be smaller than size of combined signal combined for trigger
 
+  //std::random_device rd;  // Will be used to obtain a seed for the random number engine
+  //std::mt19937 gen1(rd()); // Standard mersenne_twister_engine seeded with rd()
+
+
   for (int i = 0 ; i < 16; i++) {
-    double * noise = generate_noise_flat(0.8343, n_sample_generated, 240, 1300); 
-    double sum = 0;
-    for(int j = 0; j < n_sample_generated; j++) {
-      sum += pow(noise[j], 2);
-    }
-    std::cout << "RMS: " << sqrt(sum/n_sample_generated) << std::endl;
+    double * noise = generate_noise_flat(0.8343, n_sample_generated, 240, 1300, gen); 
+    //double sum = 0;
+    //for(int j = 0; j < n_sample_generated; j++) {
+    //  sum += pow(noise[j], 2);
+    //}
+    //std::cout << "RMS: " << sqrt(sum/n_sample_generated) << std::endl;
     double * signal = getSignal(1, 128);
-    std::cout << "peak-to-peak/2: " << (*std::max_element(signal, signal+128) - *std::min_element(signal, signal+128)) / 2 << std::endl;
-    received_signal_pre_interp[i] = *signal_and_noise(signal, noise, 128, 128, n_sample_generated, 1.25, 16, 2.94912); //double signal_short[], double noise[], int signal_size, int signal_loc, int size, double SNR, double multiplier, double freq_Ghz
+    //std::cout << "peak-to-peak/2: " << (*std::max_element(signal, signal+128) - *std::min_element(signal, signal+128)) / 2 << std::endl;
+    received_signal_pre_interp[i] = *combine_signal_noise(signal, noise, 128, 128, n_sample_generated, snr, 2., 2.94912); //double signal_short[], double noise[], int signal_size, int signal_loc, int size, double SNR, double multiplier, double freq_Ghz
   }
 
   for (int i=0; i<n_samples; i++) {
@@ -709,28 +796,7 @@ PueoSimple::PueoSimple() {
 
 
 
-//  for (int i=0; i<n_samples; i++) {
-//    x[i] = i;
-//    y[0][i] =  gaussian_pulse(i + 0    * sin (theta) / (c * delta_t) - 0   * sin (phi)  / (c * delta_t), std, pos, peak);
-//    y[1][i] =  gaussian_pulse(i + h2   * sin (theta) / (c * delta_t) - 0   * sin (phi)  / (c * delta_t), std, pos, peak);
-//    y[2][i] =  gaussian_pulse(i + h1+h2* sin (theta) / (c * delta_t) - 0   * sin (phi)  / (c * delta_t), std, pos, peak);
-//    y[3][i] =  gaussian_pulse(i + h    * sin (theta) / (c * delta_t) - 0   * sin (phi)  / (c * delta_t), std, pos, peak);
-//
-//    y[4][i] =  gaussian_pulse(i + 0    * sin (theta) / (c * delta_t) - w1   * sin (phi)  / (c * delta_t), std, pos, peak);
-//    y[5][i] =  gaussian_pulse(i + h2   * sin (theta) / (c * delta_t) - w1   * sin (phi)  / (c * delta_t), std, pos, peak);
-//    y[6][i] =  gaussian_pulse(i + h1+h2* sin (theta) / (c * delta_t) - w1   * sin (phi)  / (c * delta_t), std, pos, peak);
-//    y[7][i] =  gaussian_pulse(i + h    * sin (theta) / (c * delta_t) - w1   * sin (phi)  / (c * delta_t), std, pos, peak);
-//
-//    y[8][i] =  gaussian_pulse(i + 0    * sin (theta) / (c * delta_t) - 2*w1 * sin (phi)  / (c * delta_t), std, pos, peak);
-//    y[9][i] =  gaussian_pulse(i + h2   * sin (theta) / (c * delta_t) - 2*w1 * sin (phi)  / (c * delta_t), std, pos, peak);
-//    y[10][i] = gaussian_pulse(i + h1+h2* sin (theta) / (c * delta_t) - 2*w1 * sin (phi)  / (c * delta_t), std, pos, peak);
-//    y[11][i] = gaussian_pulse(i + h    * sin (theta) / (c * delta_t) - 2*w1 * sin (phi)  / (c * delta_t), std, pos, peak);
-//
-//    y[12][i] = gaussian_pulse(i + 0    * sin (theta) / (c * delta_t) - 3*w1 * sin (phi)  / (c * delta_t), std, pos, peak);
-//    y[13][i] = gaussian_pulse(i + h2   * sin (theta) / (c * delta_t) - 3*w1 * sin (phi)  / (c * delta_t), std, pos, peak);
-//    y[14][i] = gaussian_pulse(i + h1+h2* sin (theta) / (c * delta_t) - 3*w1 * sin (phi)  / (c * delta_t), std, pos, peak);
-//    y[15][i] = gaussian_pulse(i + h    * sin (theta) / (c * delta_t) - 3*w1 * sin (phi)  / (c * delta_t), std, pos, peak);
-//  }
+
 
   for (int i_ant=0; i_ant<n_ant_L2; i_ant++) {
     TGraph gr = TGraph (n_samples, x, y[i_ant]);
@@ -742,63 +808,11 @@ PueoSimple::PueoSimple() {
 
 int main(int argc, char **argv) {
   TApplication app("app", &argc, argv); //this allows interactive plots for cmake application
-  PueoSimple pueo;
-  std::cout.precision(3);
+  std::random_device rd;  // Will be used to obtain a seed for the random number engine
+  std::mt19937 gen(rd()); // Standard mersenne_twister_engine seeded with rd()
 
-  //visualiseFields();
-  double * test_signal = getSignal(1, 128); //get signal at given off cone angle (in degrees), and expected number of values in impulse response file
-
-  double * test_noise = generate_noise_flat(0.8343, pueo.n_samples, 240, 1300);
-  //TGraph signal_noise_test = *signal_and_noise(test_signal, test_noise, 128, 64, n_samples, 10, 1, 2.94912);
-
-
-  
   std::ios::sync_with_stdio(false);
-
-  //suppress cout
   std::cout.setstate(std::ios_base::failbit);
-
-  //print out signals data
-  //std::vector<TGraph>::iterator it;
-  //it=pueo.signals.begin();
-  //int const n = it->GetN();
-  //double xout[n], yout[n];
-  //for (it=pueo.signals.begin();it!=pueo.signals.end(); ++it) {
-  //  std::cout << "Antenna " << it - pueo.signals.begin() << " (continuous)"  <<"\n";
-  //  for (int i=0; i<it->GetN(); i++) {
-  //    it->GetPoint(i,xout[i],yout[i]);
-  //    std::cout << xout[i]<< '\t';
-  //    std::cout << yout[i]<<"\n";
-  //  }
-  //}
-
-
-  //create digitised data
-  Digitize(&pueo, 8, 1);
-
-
-
-
-  //print out digitised signals daa
-  TCanvas *c_digi = new TCanvas("c_digi","Discrete antenna data",500,500,600,400);
-  TMultiGraph *mg = new TMultiGraph();
-  //std::cout << "Digitised data:" << "\n";
-  for (std::vector<TGraph>::iterator it=pueo.signals_discrete.begin();it!=pueo.signals_discrete.end(); ++it) {
-    //std::cout << "Antenna " << it - pueo.signals_discrete.begin() << " (discrete)" <<"\n";
-    //for (int i=0; i<it->GetN(); i++) {
-    //  it->GetPoint(i,xout[i],yout[i]);
-    //  std::cout << xout[i]<< '\t';
-    //  std::cout << yout[i]<<"\n";
-    //}
-    TGraph * gr3 = new TGraph(*it);
-    gr3->SetTitle(std::to_string(it - pueo.signals_discrete.begin()).c_str());
-    gr3->SetLineColor(it - pueo.signals_discrete.begin() + 1);
-    mg->Add(gr3);
-  }
-  c_digi->cd();
-  mg->Draw("A pmc plc");
-  c_digi->BuildLegend();
-
 
   //init beams
   std::vector<std::vector<int>> L1_ants; //beam number, antenna within beam
@@ -818,14 +832,123 @@ int main(int argc, char **argv) {
     L2_ants.push_back(antennas_L2);
   }
 
+  //reenable cout
+  std::cout.clear();
+  std::cout.precision(3);
+
+  std::cout << "\n" <<"L1 Beam count: " <<  L1_beams.size() << "\n";
+  std::cout << "\n" <<"L2 Beam count: " <<  L2_beams.size() << "\n";
+
+  //suppress cout
+  std::ios::sync_with_stdio(false);
+  std::cout.setstate(std::ios_base::failbit);
+
+
+  //Do loop of runs
+  int total_pueo_runs = 0;
+  double snr = 1.1;
+
+  //int L1_threshold = 0;
+  int L1_threshold = 1050;
+  int L2_threshold = 5223;
+  
+  int L2_triggered = 0;
+  double total_L1_beams;
+  double L1_beams_triggered;
+  for(int run = 0; run < total_pueo_runs; run++ ) {
+    PueoSimple pueo(gen, snr);
+    //suppress cout
+    
+    //create digitised data
+    Digitize(&pueo, 4, pow(2,0));
+  
+    //do L1 trigger
+    L1Trigger(&pueo,L1_ants,L1_beams, 8, 16, L1_threshold, 64); //args: pueo, step, window, threshold, edge size
+
+    for (bool b: pueo.L1_triggers) {
+      total_L1_beams++;
+      if (b == true) {
+        L1_beams_triggered++;
+      }
+    }
+
+    //do L2 trigger
+    L2Trigger(&pueo,L2_ants,L2_beams,L1_L2_map, 8, 16, L2_threshold, 64); //args: pueo, step, window, threshold, edge size
+
+    //Compare L2 max values to threshold
+    if ( *max_element(pueo.L2_max_value.begin(), pueo.L2_max_value.end()) > L2_threshold) {
+      L2_triggered++;
+    }
+
+    
+
+  }
+  //reenable cout
+  std::cout.clear();
+  std::cout.precision(3);
+
+  std::cout << "\n" <<"Loop runs: " <<  total_pueo_runs << "\n";
+  std::cout << "\n" <<"Loop triggers: " <<  L2_triggered << "\n";
+  std::cout << "\n" <<"Total L1 beams: " <<  total_L1_beams << "\n";
+  std::cout << "\n" <<"L1 beams triggered: " <<  L1_beams_triggered << "\n";
+
+
+
+
+  //suppress cout
+  std::ios::sync_with_stdio(false);
+  std::cout.setstate(std::ios_base::failbit);
+
+
+
+
+  //initialise pueo object - sets up signal and noise for each channels
+  PueoSimple pueo(gen, snr);
+
+  std::cout.precision(3);
+
+
+  //evaluate_threshold(pueo, gen, true); //pueo object, random number generator, is_L2
+  //evaluate_threshold(pueo, gen, false); //pueo object, random number generator, is_L2
+
+  //For testing - different off axis signals
+  //visualiseFields();
+  
+  //For testing - getting signal
+  //double * test_signal = getSignal(1, 128); //get signal at given off cone angle (in degrees), and expected number of values in impulse response file
+
+  //For testing - getting noise
+  //double * test_noise = generate_noise_flat(0.8343, pueo.n_samples, 240, 1300);
+  //TGraph signal_noise_test = *combine_signal_noise(test_signal, test_noise, 128, 64, n_samples, 10, 1, 2.94912);
+
+
+
+  //create digitised data
+  Digitize(&pueo, 4, pow(2,0));
+
+  //Plot digitised signals data
+  TCanvas *c_digi = new TCanvas("c_digi","Discrete antenna data",500,500,600,400);
+  TMultiGraph *mg = new TMultiGraph();
+  //std::cout << "Digitised data:" << "\n";
+  for (std::vector<TGraph>::iterator it=pueo.signals_discrete.begin();it!=pueo.signals_discrete.end(); ++it) {
+    TGraph * gr3 = new TGraph(*it);
+    gr3->SetTitle(std::to_string(it - pueo.signals_discrete.begin()).c_str());
+    gr3->SetLineColor(it - pueo.signals_discrete.begin() + 1);
+    mg->Add(gr3);
+  }
+  c_digi->cd();
+  mg->Draw("A pmc plc");
+  c_digi->BuildLegend();
+
+
+  
+
 
   //do L1 trigger
-  L1Trigger(&pueo,L1_ants,L1_beams, 4, 8, 0, 64); //args: pueo, step, window, threshold, edge size
+  L1Trigger(&pueo,L1_ants,L1_beams, 8, 16, L1_threshold, 64); //args: pueo, step, window, threshold, edge size
 
   //do L2 trigger
-  L2Trigger(&pueo,L2_ants,L2_beams,L1_L2_map, 4, 8, 0, 64); //args: pueo, step, window, threshold, edge size
-
-
+  L2Trigger(&pueo,L2_ants,L2_beams,L1_L2_map, 8, 16, L2_threshold, 64); //args: pueo, step, window, threshold, edge size
 
   //print L1 triggers
   std::cout << "L1 Triggers" <<"\n";
@@ -841,9 +964,6 @@ int main(int argc, char **argv) {
     std::cout << i << "\t\t" << pueo.L2_triggers[i] << "\t\t" << pueo.L2_max_value[i]<< "\t\t" << pueo.L2_max_loc[i]  <<"\n";
   }
 
-  //reenable cout
-  std::cout.clear();
-  std::cout.precision(3);
 
 
 
@@ -891,6 +1011,14 @@ int main(int argc, char **argv) {
   dt_L1->GetYaxis()-> SetTitleOffset(2); 
   dt_L1->GetZaxis()-> SetTitleOffset(-0.5); 
 
+  dt_L1->GetXaxis()->SetLabelSize(0.05);
+  dt_L1->GetYaxis()->SetLabelSize(0.05);
+  dt_L1->GetZaxis()->SetLabelSize(0.05);
+
+  dt_L1->GetXaxis()->SetTitleSize(.05);
+  dt_L1->GetYaxis()->SetTitleSize(.05);
+
+
   //visual represent triggers - L2
 
   TCanvas *c_L2 = new TCanvas("L2","L2",0,0,600,400);
@@ -927,6 +1055,18 @@ int main(int argc, char **argv) {
   dt_L2->GetXaxis()-> SetTitleOffset(2); 
   dt_L2->GetYaxis()-> SetTitleOffset(2); 
   dt_L2->GetZaxis()-> SetTitleOffset(-0.5); 
+
+  dt_L2->GetXaxis()->SetLabelSize(0.05);
+  dt_L2->GetYaxis()->SetLabelSize(0.05);
+  dt_L2->GetZaxis()->SetLabelSize(0.05);
+
+  dt_L2->GetXaxis()->SetTitleSize(.05);
+  dt_L2->GetYaxis()->SetTitleSize(.05);
+
+
+  //reenable cout
+  std::cout.clear();
+  std::cout.precision(3);
 
 
   //connect TApplication to canvas - seems like one is enough
