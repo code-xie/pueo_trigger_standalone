@@ -28,14 +28,15 @@ class PueoSimple {
   static const int n_samples=512;
   static const int n_ant_L1=8;
   static const int n_ant_L2=16;
+  static const int n_beams_L1=371;
+  static const int n_beams_L2=1219;
+
 
   std::vector<bool> L1_triggers;
-  std::vector<bool> L2_triggers;
+  bool L2_triggered;
 
-  std::vector<int> L1_max_value;
-  std::vector<int> L2_max_value;
-  std::vector<int> L1_max_loc;
-  std::vector<int> L2_max_loc;
+  std::vector<int> L1_max_value = std::vector<int>(n_beams_L1);
+  std::vector<int> L2_max_value = std::vector<int>(n_beams_L2);
 
 
   std::vector<TGraph> signals;
@@ -280,15 +281,16 @@ static void generate_beams_L2(std::vector<std::vector<int>> &L2_beams, std::vect
 //writes to vector of L1 triggers; requires defn of make up and relative delay between antennas for L1 beams
 void L1Trigger(PueoSimple* pueo1, std::vector<std::vector<int>> & L1_ants,std::vector<std::vector<int>> & L1_beams,  int step, int window, int threshold, int max_shift) {
 
-
+  //initialise max values to all zeros
   for(int i_beam=0; i_beam <  L1_beams.size(); i_beam += 1) {
+    pueo1->L1_max_value.at(i_beam) = 0;
+  }
 
-    bool beam_triggered = false;
-    int max_coherent = 0;
-    int max_loc = 0;
-    for(int wind_pos=max_shift; wind_pos < pueo1->n_samples - max_shift-window -16; wind_pos+=step) {
-
+  for(int wind_pos=max_shift; wind_pos < pueo1->n_samples - max_shift-window -16; wind_pos+=step) {
+    bool window_triggered = false;
+    for(int i_beam=0; i_beam <  L1_beams.size(); i_beam += 1) {
       int coherent_sum = 0;
+
       for (int samp_pos=0; samp_pos < window ; samp_pos +=1){
         int coherent_sum_sample = 0;
         for (int i_ant=0; i_ant<pueo1->n_ant_L1; i_ant+=1) {
@@ -297,21 +299,52 @@ void L1Trigger(PueoSimple* pueo1, std::vector<std::vector<int>> & L1_ants,std::v
         int coherent_sum_sqr_sample = coherent_sum_sample * coherent_sum_sample;
         coherent_sum += coherent_sum_sqr_sample;
       }
+    
       if (coherent_sum > threshold) {
-        beam_triggered = true;
+        window_triggered = true;
       }
-      if (coherent_sum > max_coherent) { 
-        max_coherent = coherent_sum;
-        max_loc = wind_pos;
+      if (coherent_sum > pueo1->L1_max_value.at(i_beam)){
+        pueo1->L1_max_value.at(i_beam) = coherent_sum;
       }
-      
-
+    
     }
 
-  pueo1->L1_triggers.push_back(beam_triggered);
-  pueo1->L1_max_value.push_back(max_coherent);
-  pueo1->L1_max_loc.push_back(max_loc);
+    pueo1->L1_triggers.push_back(window_triggered);
   }
+
+
+//  for(int i_beam=0; i_beam <  L1_beams.size(); i_beam += 1) {
+//
+//    bool beam_triggered = false;
+//    int max_coherent = 0;
+//    int max_loc = 0;
+//    for(int wind_pos=max_shift; wind_pos < pueo1->n_samples - max_shift-window -16; wind_pos+=step) {
+//
+//      int coherent_sum = 0;
+//      for (int samp_pos=0; samp_pos < window ; samp_pos +=1){
+//        int coherent_sum_sample = 0;
+//        for (int i_ant=0; i_ant<pueo1->n_ant_L1; i_ant+=1) {
+//          coherent_sum_sample += pueo1->signals_discrete.at(L1_ants.at(i_beam).at(i_ant)).GetPointY(wind_pos+samp_pos-L1_beams.at(i_beam).at(i_ant));
+//        }
+//        int coherent_sum_sqr_sample = coherent_sum_sample * coherent_sum_sample;
+//        coherent_sum += coherent_sum_sqr_sample;
+//      }
+//      if (coherent_sum > threshold) {
+//        beam_triggered = true;
+//      }
+//      if (coherent_sum > max_coherent) { 
+//        max_coherent = coherent_sum;
+//        max_loc = wind_pos;
+//      }
+//      
+//
+//    }
+//
+//  pueo1->L1_triggers.push_back(beam_triggered);
+//  pueo1->L1_max_value.push_back(max_coherent);
+//  pueo1->L1_max_loc.push_back(max_loc);
+//  }
+
 }
 
 
@@ -319,23 +352,26 @@ void L1Trigger(PueoSimple* pueo1, std::vector<std::vector<int>> & L1_ants,std::v
 void L2Trigger(PueoSimple* pueo1, std::vector<std::vector<int>> & L2_ants,std::vector<std::vector<int>> & L2_beams, std::vector<std::vector<int>> & L1_L2_map, int step, int window, int threshold, int max_shift) {
 
 
-  //get list of L2 beams that need to be triggered
-  std::vector<bool> L2_from_L1 (L2_beams.size(), 0);
-  for (int i = 0; i < pueo1->L1_triggers.size(); i++) {
-    if (pueo1->L1_triggers.at(i) == true) {
-      for (std::vector<int>::iterator j = L1_L2_map.at(i).begin(); j != L1_L2_map.at(i).end(); ++j) {
-        L2_from_L1.at(*j) = true;
-      }
-    }
+  ////get list of L2 beams that need to be triggered
+  //std::vector<bool> L2_from_L1 (L2_beams.size(), 0);
+  //for (int i = 0; i < pueo1->L1_triggers.size(); i++) {
+  //  if (pueo1->L1_triggers.at(i) == true) {
+  //    for (std::vector<int>::iterator j = L1_L2_map.at(i).begin(); j != L1_L2_map.at(i).end(); ++j) {
+  //      L2_from_L1.at(*j) = true;
+  //    }
+  //  }
+  //}
+
+  //initialise max values to all zeros
+  for(int i_beam=0; i_beam <  L2_beams.size(); i_beam += 1) {
+    pueo1->L2_max_value.at(i_beam) = 0;
   }
 
-  for(int i_beam=0; i_beam <  L2_beams.size(); i_beam += 1) {
-    if (L2_from_L1.at(i_beam) == true)  {
-      bool beam_triggered = false;
-      int max_coherent = 0;
-      int max_loc = 0;
-      for(int wind_pos=max_shift; wind_pos < pueo1->n_samples - max_shift-window -16; wind_pos+=step) {
-
+  int window_count = 0;
+  pueo1->L2_triggered = false;
+  for(int wind_pos=max_shift; wind_pos < pueo1->n_samples - max_shift-window -16; wind_pos+=step) {
+    if (pueo1->L1_triggers.at(window_count) == true)  {
+      for(int i_beam=0; i_beam <  L2_beams.size(); i_beam += 1) {
         int coherent_sum = 0;
         for (int samp_pos=0; samp_pos < window ; samp_pos +=1){
           int coherent_sum_sample = 0;
@@ -346,24 +382,53 @@ void L2Trigger(PueoSimple* pueo1, std::vector<std::vector<int>> & L2_ants,std::v
           coherent_sum += coherent_sum_sqr_sample;
         }
         if (coherent_sum > threshold) {
-          beam_triggered = true;
+           pueo1->L2_triggered = true;
         }
-        if (coherent_sum > max_coherent) {
-          max_coherent = coherent_sum;
-          max_loc = wind_pos;
-        }
+        if (coherent_sum > pueo1->L2_max_value.at(i_beam)){
+          pueo1->L2_max_value.at(i_beam) = coherent_sum;
       }
-
-      pueo1->L2_triggers.push_back(beam_triggered);
-      pueo1->L2_max_value.push_back(max_coherent);
-      pueo1->L2_max_loc.push_back(max_loc);
-    } else {
-      pueo1->L2_triggers.push_back(false);
-      pueo1->L2_max_value.push_back(-1);
-      pueo1->L2_max_loc.push_back(-1);
+      }
     }
-
+    window_count++;
   }
+
+
+
+//  for(int i_beam=0; i_beam <  L2_beams.size(); i_beam += 1) {
+//    if (L2_from_L1.at(i_beam) == true)  {
+//      bool beam_triggered = false;
+//      int max_coherent = 0;
+//      int max_loc = 0;
+//      for(int wind_pos=max_shift; wind_pos < pueo1->n_samples - max_shift-window -16; wind_pos+=step) {
+//
+//        int coherent_sum = 0;
+//        for (int samp_pos=0; samp_pos < window ; samp_pos +=1){
+//          int coherent_sum_sample = 0;
+//          for (int i_ant=0; i_ant<pueo1->n_ant_L2; i_ant+=1) {
+//            coherent_sum_sample += pueo1->signals_discrete.at(L2_ants.at(i_beam).at(i_ant)).GetPointY(wind_pos+samp_pos-L2_beams.at(i_beam).at(i_ant));
+//          }
+//          int coherent_sum_sqr_sample = coherent_sum_sample * coherent_sum_sample;
+//          coherent_sum += coherent_sum_sqr_sample;
+//        }
+//        if (coherent_sum > threshold) {
+//          beam_triggered = true;
+//        }
+//        if (coherent_sum > max_coherent) {
+//          max_coherent = coherent_sum;
+//          max_loc = wind_pos;
+//        }
+//      }
+//
+//      pueo1->L2_triggers.push_back(beam_triggered);
+//      pueo1->L2_max_value.push_back(max_coherent);
+//      pueo1->L2_max_loc.push_back(max_loc);
+//    } else {
+//      pueo1->L2_triggers.push_back(false);
+//      pueo1->L2_max_value.push_back(-1);
+//      pueo1->L2_max_loc.push_back(-1);
+//    }
+//
+//  }
 }
 
 
@@ -845,16 +910,17 @@ int main(int argc, char **argv) {
 
 
   //Do loop of runs
-  int total_pueo_runs = 0;
-  double snr = 1.1;
+  int total_pueo_runs = 100;
+  double snr = 1.7;
 
+  //int L1_threshold = 99990;
   //int L1_threshold = 0;
-  int L1_threshold = 1050;
+  int L1_threshold = 2080;
   int L2_threshold = 5223;
   
   int L2_triggered = 0;
-  double total_L1_beams;
-  double L1_beams_triggered;
+  //double total_L1_beams;
+  //double L1_beams_triggered;
   for(int run = 0; run < total_pueo_runs; run++ ) {
     PueoSimple pueo(gen, snr);
     //suppress cout
@@ -865,18 +931,21 @@ int main(int argc, char **argv) {
     //do L1 trigger
     L1Trigger(&pueo,L1_ants,L1_beams, 8, 16, L1_threshold, 64); //args: pueo, step, window, threshold, edge size
 
-    for (bool b: pueo.L1_triggers) {
-      total_L1_beams++;
-      if (b == true) {
-        L1_beams_triggered++;
-      }
-    }
+    //for (bool b: pueo.L1_triggers) {
+    //  total_L1_beams++;
+    //  if (b == true) {
+    //    L1_beams_triggered++;
+    //  }
+    //}
 
     //do L2 trigger
     L2Trigger(&pueo,L2_ants,L2_beams,L1_L2_map, 8, 16, L2_threshold, 64); //args: pueo, step, window, threshold, edge size
 
     //Compare L2 max values to threshold
-    if ( *max_element(pueo.L2_max_value.begin(), pueo.L2_max_value.end()) > L2_threshold) {
+    //if ( *max_element(pueo.L2_max_value.begin(), pueo.L2_max_value.end()) > L2_threshold) {
+    //  L2_triggered++;
+    //}
+    if (pueo.L2_triggered == true) {
       L2_triggered++;
     }
 
@@ -889,8 +958,8 @@ int main(int argc, char **argv) {
 
   std::cout << "\n" <<"Loop runs: " <<  total_pueo_runs << "\n";
   std::cout << "\n" <<"Loop triggers: " <<  L2_triggered << "\n";
-  std::cout << "\n" <<"Total L1 beams: " <<  total_L1_beams << "\n";
-  std::cout << "\n" <<"L1 beams triggered: " <<  L1_beams_triggered << "\n";
+  //std::cout << "\n" <<"Total L1 beams: " <<  total_L1_beams << "\n";
+  //std::cout << "\n" <<"L1 beams triggered: " <<  L1_beams_triggered << "\n";
 
 
 
@@ -941,9 +1010,6 @@ int main(int argc, char **argv) {
   c_digi->BuildLegend();
 
 
-  
-
-
   //do L1 trigger
   L1Trigger(&pueo,L1_ants,L1_beams, 8, 16, L1_threshold, 64); //args: pueo, step, window, threshold, edge size
 
@@ -954,14 +1020,14 @@ int main(int argc, char **argv) {
   std::cout << "L1 Triggers" <<"\n";
   std::cout << "beam\t" <<"triggered\t" << "Max coherent sum\t" << "Max sum location" <<"\n";
   for (int i=0; i<pueo.L1_triggers.size(); i++) {
-    std::cout << i << "\t\t" << pueo.L1_triggers[i] << "\t\t" << pueo.L1_max_value[i]<< "\t\t" << pueo.L1_max_loc[i]  <<"\n";
+    std::cout << i << "\t\t" << pueo.L1_triggers[i] << "\t\t" << pueo.L1_max_value[i]  <<"\n";
   }
 
   //print L2 triggers
   std::cout << "L2 Triggers" <<"\n";
   std::cout << "beam\t" <<"triggered\t" << "Max coherent sum\t" << "Max sum location" <<"\n";
-  for (int i=0; i<pueo.L2_triggers.size(); i++) {
-    std::cout << i << "\t\t" << pueo.L2_triggers[i] << "\t\t" << pueo.L2_max_value[i]<< "\t\t" << pueo.L2_max_loc[i]  <<"\n";
+  for (int i=0; i<pueo.L2_max_value.size(); i++) {
+    std::cout << i << "\t\t" << pueo.L2_max_value[i]  <<"\n";
   }
 
 
