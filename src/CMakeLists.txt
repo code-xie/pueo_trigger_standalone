@@ -13,6 +13,15 @@
 include("${ROOT_USE_FILE}")
 separate_arguments(ROOT_EXE_LINKER_FLAGS)
 
+#SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pg -g")
+#SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -pg -g")
+#SET(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -pg -g")
+
+#SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ggdb -fno-omit-frame-pointer ")
+#SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -ggdb -fno-omit-frame-pointer")
+#SET(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -ggdb -fno-omit-frame-pointer")
+
+
 
 # Create a shared library.
 # Passing cmake targets such as `ROOT::RIO` as dependencies (rather than plain
@@ -25,7 +34,8 @@ separate_arguments(ROOT_EXE_LINKER_FLAGS)
 
 # Create the main program using the library.
    add_executable(Main PueoTrigger_standalone.cc)
-   target_link_libraries(Main PUBLIC fftw3 fftw ROOT::Core ROOT::MathCore ROOT::Gpad ROOT::Graf3d ROOT::Graf ROOT::Hist ROOT::Imt ROOT::Matrix ROOT::Net ROOT::Physics ROOT::RIO ROOT::ROOTDataFrame ROOT::ROOTVecOps ROOT::Rint ROOT::Thread ROOT::TreePlayer ROOT::Tree ) 
+   target_sources(Main PRIVATE FTPair.cc)
+   target_link_libraries(Main PUBLIC fftw3 fftw ROOT::Core ROOT::MathCore ROOT::Gpad ROOT::Graf3d ROOT::Graf ROOT::Hist ROOT::Imt ROOT::Matrix ROOT::Net ROOT::Physics ROOT::RIO ROOT::ROOTDataFrame ROOT::ROOTVecOps ROOT::Rint ROOT::Thread ROOT::TreePlayer ROOT::Tree) 
 
 
 
