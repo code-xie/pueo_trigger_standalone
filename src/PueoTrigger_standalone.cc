@@ -1254,7 +1254,7 @@ int main(int argc, char **argv) {
   std::random_device rd;  // Will be used to obtain a seed for the random number engine
   std::mt19937 gen(rd()); // Standard mersenne_twister_engine seeded with rd()
 
-  TApplication app("app", &argc, argv); //interactive plots for reviewing threshold eval. Also needs app.Run() later
+  //TApplication app("app", &argc, argv); //interactive plots for reviewing threshold eval. Also needs app.Run() later
 
   int l1threshold;
   int l2threshold;
@@ -1313,7 +1313,7 @@ int main(int argc, char **argv) {
 
   //visualiseTrigger(argc, argv, L1_threshold, L2_threshold, snr);
   
-  app.Run(); //interactive plots for reviewing threshold eval
+  //app.Run(); //interactive plots for reviewing threshold eval
 
   return 0;
 }
