@@ -1262,7 +1262,7 @@ int main(int argc, char **argv) {
 
   //L1 threshold evaluation - at least 1E4 iterations; fast
   std::cout<< "\n" << "--L1 threshold evaluation--" << "\n";
-  repeats = 1E3;
+  repeats = 1E4;
   triggerThreshold * tThresholdL1 = new triggerThreshold();
   for (int r=0; r< repeats ; r++) {
     //replace signal_gen with pueoSim noise, no signal, vector of 16 FTPairs, each 512 samples
@@ -1275,7 +1275,7 @@ int main(int argc, char **argv) {
   
   //L2 threshold evaluation - should be at least 1E4; slow 
   std::cout<< "\n" << "--L2 threshold evaluation--" << "\n";
-  repeats = 1E3;
+  repeats = 1E4;
   triggerThreshold * tThresholdL2 = new triggerThreshold();
   for (int r=0; r< repeats ; r++) {
     //replace signal_gen with pueoSim noise, no signal, vector of 16 FTPairs, each 512 samples
