@@ -25,7 +25,7 @@ void PRINT_STATE(const char* funcName, bool fTime,  bool fFreq){
 
 
 
-icemc::FTPair::FTPair()
+nicemc::FTPair::FTPair()
   : fTimeDomainGraph(),
     fFreqDomain(),
     fNeedToUpdateTimeDomain(false),
@@ -48,7 +48,7 @@ icemc::FTPair::FTPair()
 }
 
 
-icemc::FTPair::FTPair(int n, const double* timeDomainAmplitude,  double dt, double t0)
+nicemc::FTPair::FTPair(int n, const double* timeDomainAmplitude,  double dt, double t0)
   : fTimeDomainGraph(n, timeDomainAmplitude, timeDomainAmplitude),
     fFreqDomain(),
     fNeedToUpdateTimeDomain(false),
@@ -66,7 +66,7 @@ icemc::FTPair::FTPair(int n, const double* timeDomainAmplitude,  double dt, doub
 
 
 
-icemc::FTPair::FTPair(const std::vector<double>& timeDomainAmplitude, double dt, double t0)
+nicemc::FTPair::FTPair(const std::vector<double>& timeDomainAmplitude, double dt, double t0)
   : fTimeDomainGraph(timeDomainAmplitude.size(), &timeDomainAmplitude[0], &timeDomainAmplitude[0]),
     fFreqDomain(),
     fNeedToUpdateTimeDomain(false),
@@ -84,7 +84,7 @@ icemc::FTPair::FTPair(const std::vector<double>& timeDomainAmplitude, double dt,
 
 
 
-icemc::FTPair::FTPair(const TGraph& grTimeDomain)
+nicemc::FTPair::FTPair(const TGraph& grTimeDomain)
   : fTimeDomainGraph(grTimeDomain),
     fFreqDomain(),
     fNeedToUpdateTimeDomain(false),
@@ -103,7 +103,7 @@ icemc::FTPair::FTPair(const TGraph& grTimeDomain)
 
 
 
-icemc::FTPair::FTPair(const std::vector<std::complex<double> >& freqDomainPhasors, double df, bool doNormalTimeOrdering, double t0)
+nicemc::FTPair::FTPair(const std::vector<std::complex<double> >& freqDomainPhasors, double df, bool doNormalTimeOrdering, double t0)
   : fTimeDomainGraph(),
     fFreqDomain(freqDomainPhasors),
     fNeedToUpdateTimeDomain(true),
@@ -122,7 +122,7 @@ icemc::FTPair::FTPair(const std::vector<std::complex<double> >& freqDomainPhasor
 }
 
 
-icemc::FTPair::FTPair(int nf, const std::complex<double>* freqDomainPhasors, double df, bool doNormalTimeOrdering, double t0)
+nicemc::FTPair::FTPair(int nf, const std::complex<double>* freqDomainPhasors, double df, bool doNormalTimeOrdering, double t0)
   : fTimeDomainGraph(),
     fFreqDomain(freqDomainPhasors, freqDomainPhasors+nf),
     fNeedToUpdateTimeDomain(true),
@@ -146,26 +146,26 @@ icemc::FTPair::FTPair(int nf, const std::complex<double>* freqDomainPhasors, dou
 
 
 
-const TGraph& icemc::FTPair::getTimeDomain() const{
+const TGraph& nicemc::FTPair::getTimeDomain() const{
   PRINT_STATE_IF_DEBUG();
   maybeUpdateTimeDomain();
   return fTimeDomainGraph;
 }
 
-TGraph& icemc::FTPair::changeTimeDomain() {
+TGraph& nicemc::FTPair::changeTimeDomain() {
   PRINT_STATE_IF_DEBUG();
   maybeUpdateTimeDomain();
   fNeedToUpdateFreqDomain = true;
   return fTimeDomainGraph;
 }
 
-const std::vector<std::complex<double> >& icemc::FTPair::getFreqDomain() const {
+const std::vector<std::complex<double> >& nicemc::FTPair::getFreqDomain() const {
   PRINT_STATE_IF_DEBUG();
   maybeUpdateFreqDomain();
   return fFreqDomain;
 }
 
-std::vector<std::complex<double> >& icemc::FTPair::changeFreqDomain() {
+std::vector<std::complex<double> >& nicemc::FTPair::changeFreqDomain() {
   PRINT_STATE_IF_DEBUG();
   maybeUpdateFreqDomain();
   fNeedToUpdateTimeDomain = true;
@@ -173,13 +173,13 @@ std::vector<std::complex<double> >& icemc::FTPair::changeFreqDomain() {
 }
 
 
-void icemc::FTPair::forceUpdateTimeDomain() const {
+void nicemc::FTPair::forceUpdateTimeDomain() const {
   PRINT_STATE_IF_DEBUG();
   fNeedToUpdateTimeDomain = true;
   maybeUpdateTimeDomain();
 };
 
-void icemc::FTPair::forceUpdateFreqDomain() const {
+void nicemc::FTPair::forceUpdateFreqDomain() const {
   PRINT_STATE_IF_DEBUG();
   fNeedToUpdateFreqDomain = true;
   maybeUpdateFreqDomain();
@@ -187,7 +187,7 @@ void icemc::FTPair::forceUpdateFreqDomain() const {
 
 
 
-TGraph icemc::FTPair::makePowerSpectralDensityGraph() const {
+TGraph nicemc::FTPair::makePowerSpectralDensityGraph() const {
   TGraph grPowerSpectrum = makePowerSpectrumGraph();
   double df = grPowerSpectrum.GetX()[1] - grPowerSpectrum.GetX()[0];
   for(int j=0; j < grPowerSpectrum.GetN(); j++){
@@ -197,7 +197,7 @@ TGraph icemc::FTPair::makePowerSpectralDensityGraph() const {
 }
 
 
-TGraph icemc::FTPair::makePowerSpectrumGraph() const {
+TGraph nicemc::FTPair::makePowerSpectrumGraph() const {
 
   PRINT_STATE_IF_DEBUG();
   maybeUpdateFreqDomain();
@@ -248,7 +248,7 @@ TGraph icemc::FTPair::makePowerSpectrumGraph() const {
 
 
 
-void icemc::FTPair::doNormalTimeDomainOrdering() const {
+void nicemc::FTPair::doNormalTimeDomainOrdering() const {
   PRINT_STATE_IF_DEBUG();
   
   TGraph grOld = getTimeDomain();
@@ -273,7 +273,7 @@ void icemc::FTPair::doNormalTimeDomainOrdering() const {
 
 
 
-void icemc::FTPair::applyConstantGroupDelay(double delaySeconds, bool circularDelay){
+void nicemc::FTPair::applyConstantGroupDelay(double delaySeconds, bool circularDelay){
   PRINT_STATE_IF_DEBUG();
 
   if(delaySeconds==0) {
@@ -352,7 +352,7 @@ void icemc::FTPair::applyConstantGroupDelay(double delaySeconds, bool circularDe
 
 
 
-int icemc::FTPair::zeroPadFreqDomainSoTimeDomainLengthIsPowerOf2(double df) const {
+int nicemc::FTPair::zeroPadFreqDomainSoTimeDomainLengthIsPowerOf2(double df) const {
   PRINT_STATE_IF_DEBUG();
   
   // assume freq domain vector is not dirty, but everything else is...
@@ -411,7 +411,7 @@ int icemc::FTPair::zeroPadFreqDomainSoTimeDomainLengthIsPowerOf2(double df) cons
 
 
  
-int icemc::FTPair::zeroPadTimeDomainLengthToPowerOf2() const {
+int nicemc::FTPair::zeroPadTimeDomainLengthToPowerOf2() const {
   PRINT_STATE_IF_DEBUG();
   
   // asssume unpadded time domain is good, everything else is dirty
@@ -438,7 +438,7 @@ int icemc::FTPair::zeroPadTimeDomainLengthToPowerOf2() const {
 
 
 
-void icemc::FTPair::maybeUpdateFreqDomain() const {
+void nicemc::FTPair::maybeUpdateFreqDomain() const {
   PRINT_STATE_IF_DEBUG();
   
   if(fNeedToUpdateFreqDomain){
@@ -479,7 +479,7 @@ void icemc::FTPair::maybeUpdateFreqDomain() const {
 
 
 
-void icemc::FTPair::maybeUpdateTimeDomain() const {
+void nicemc::FTPair::maybeUpdateTimeDomain() const {
   PRINT_STATE_IF_DEBUG();
 
   if(fNeedToUpdateTimeDomain){
@@ -495,7 +495,7 @@ void icemc::FTPair::maybeUpdateTimeDomain() const {
     int nf = zeroPadFreqDomainSoTimeDomainLengthIsPowerOf2(df);
     int nNew = getNumTimes(nf); // this the the required power of 2
 
-    // Here we follow the conventional place for the normalization as used in icemc.
+    // Here we follow the conventional place for the normalization as used in nicemc.
     // Forward and then inv FFT scales output by N/2
     // here we take that out by scaling down just before the inverse FT
     double scaleFactor = 2./nNew; // numerical recipes scaling
@@ -609,7 +609,7 @@ void four1(double *data, const int isign, int nsize) {
  * @param nsize is the the length of data: MUST BE A POWER OF 2!
  */
 
-void icemc::FTPair::realft(double *data, const int isign, int nsize){
+void nicemc::FTPair::realft(double *data, const int isign, int nsize){
   int i, i1, i2, i3, i4;
   double c1=0.5,c2,h1r,h1i,h2r,h2i,wr,wi,wpr,wpi,wtemp,theta;
   theta=3.141592653589793238/(nsize>>1);
@@ -653,7 +653,7 @@ void icemc::FTPair::realft(double *data, const int isign, int nsize){
 
 
 
-void icemc::FTPair::dump(const char* fileName) const {
+void nicemc::FTPair::dump(const char* fileName) const {
   
   TFile* f= new TFile(fileName, "recreate");
 

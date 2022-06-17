@@ -5,7 +5,7 @@
 #include "TGraph.h"
 //#include "FFTtools.h"
 
-namespace icemc {
+namespace nicemc {
 
   /**
    * @class FTPair

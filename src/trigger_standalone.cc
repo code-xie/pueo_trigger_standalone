@@ -22,608 +22,8 @@
 #include "FTPair.h"
 #include "TFitResult.h"
 #include "TF1.h"
+#include "trigger.h"
 
-
-
-class pueoTrigger {
-  public:
-    static const int n_ant_L1=8;
-    static const int n_ant_L2=16;
-    
-
-    int n_samples;
-    int n_beams_L1;
-    int n_beams_L2;
-    std::vector<bool> L1_triggered_windows;
-    bool L2_triggered = false;
-    float scaling = 1.0;
-
-    std::vector<int> L1_max_value;
-    std::vector<int> L2_max_value;
-
-
-    std::vector<TGraph> signals;
-    std::vector<TGraph> signals_discrete;
-
-    std::vector<std::vector<int>> L1_ants; //beam number, antenna within beam
-    std::vector<std::vector<int>> L1_beams;
-    std::vector<std::vector<int>> L2_ants;
-    std::vector<std::vector<int>> L2_beams;
-    std::vector<std::vector<int>> L1_L2_map;
-
-    pueoTrigger() {
-
-      generate_beams_L1(L1_beams);
-      n_beams_L1 = L1_beams.size();
-      std::vector<int> antennas_L1 = {0,1,2,3,4,5,6,7};
-      for (int i=0; i<n_beams_L1; i++) {
-        L1_ants.push_back(antennas_L1);
-      }
-      
-      generate_beams_L2(L2_beams, L1_L2_map);
-      n_beams_L2 = L2_beams.size();
-      std::vector<int> antennas_L2 = {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15};
-      for (int i=0; i<n_beams_L2; i++) {
-        L2_ants.push_back(antennas_L2);
-      }
-      
-
-      //reenable cout
-      std::cout.clear();
-      std::cout.precision(5);
-
-      std::cout << "\n" <<"pueoTrigger initialised with " <<  n_beams_L1 << " L1 beams, " <<  n_beams_L2 <<" L2 beams" << "\n";
-
-    }
-
-    //pueoTrigger(std::vector<icemc::FTPair>);
-    pueoTrigger(std::vector<icemc::FTPair> input_signals) {
-      for (int i_ant=0; i_ant<n_ant_L2; i_ant++) {
-        TGraph gr = input_signals.at(i_ant).getTimeDomain();
-        signals.push_back(gr);
-      }
-      n_samples = signals.at(0).GetN();
-
-      generate_beams_L1(L1_beams);
-      n_beams_L1 = L1_beams.size();
-      std::vector<int> antennas_L1 = {0,1,2,3,4,5,6,7};
-      for (int i=0; i<n_beams_L1; i++) {
-        L1_ants.push_back(antennas_L1);
-      }
-      
-      generate_beams_L2(L2_beams, L1_L2_map);
-      n_beams_L2 = L2_beams.size();
-      std::vector<int> antennas_L2 = {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15};
-      for (int i=0; i<n_beams_L2; i++) {
-        L2_ants.push_back(antennas_L2);
-      }
-
-      L1_max_value.clear();
-      L2_max_value.clear();
-      L1_triggered_windows.clear();
-      L1_max_value = std::vector<int>(n_beams_L1);
-      L2_max_value = std::vector<int>(n_beams_L2);
-      
-
-      //reenable cout
-      std::cout.clear();
-      std::cout.precision(5);
-
-      std::cout << "\n" <<"pueoTrigger initialised with " <<  n_beams_L1 << " L1 beams, " <<  n_beams_L2 <<" L2 beams" << "\n";
-
-
-    }
-
-  void setScaling(float multiplier) {
-    scaling = multiplier;
-  }
-    
-  void generate_beams_L1(std::vector<std::vector<int>> &L1_beams) {
-    double w1 = 0.6; //horizontal separation in m between 2 phi sectors
-    double h1 = 0.74; //vertical separation between adjacent antennas for lower 3 antennas in a phi sector
-    double h2 = 3.0; //vertical separation between adjacent antennas between top two antennas in a given phi sector
-    double h = 2 * h1 + h2;
-    double c = 3e8;
-    double delta_t = 1/(2.6e9); //time between samples, for 2.6Ghz sample frequency
-
-    /****
-    * label antennas in L1 sector as below
-    * top
-    * 0  4
-    * 1  5
-    * 2  6
-    * 3  7
-    * bottom
-    **/
-
-    //vertical separation
-    int v_max = floor((h * sin(50.0 / 180.0 * M_PI))/ (delta_t * c));
-    int v_min = ceil((h * sin(-50.0 / 180.0 * M_PI))/ (delta_t * c));
-
-    std::vector<std::vector<int>> vertical;
-    for (int i = v_min; i < v_max+1; i+=2) {
-      std::vector<int> beam;
-      beam.push_back(0);
-      beam.push_back((i / h * h2));
-      beam.push_back((i / h * (h1+h2)));
-      beam.push_back(i);
-      //std::cout << beam.at(0)  << "\t" << beam.at(1) << "\t"<< beam.at(2) << "\t"<< beam.at(3) << "\t" <<"\n";
-      vertical.push_back(beam);
-    }
-
-    //horizontal separation
-    int h_max = floor((w1 * sin(50.0 / 180.0 * M_PI))/ (delta_t * c));
-    int h_min = ceil((w1 * sin(-50.0 / 180.0 * M_PI))/ (delta_t * c));
-    std::vector<std::vector<int>> horizontal;
-    for (int i = h_min; i < h_max+1; i+=1) {
-      std::vector<int> beam;
-      beam.push_back(0);
-      beam.push_back(i);
-      //std::cout << beam.at(0)  << "\t" << beam.at(1) << "\t" <<"\n";
-      horizontal.push_back(beam);
-    }
-
-    //combine vertical and horizontal for beams
-
-    //std::cout << "**********L1 Beams**********" <<"\n";
-
-    for (std::vector<std::vector<int>>::iterator it_v = vertical.begin(); it_v != vertical.end(); ++it_v) {
-      for (std::vector<std::vector<int>>::iterator it_h = horizontal.begin(); it_h != horizontal.end(); ++it_h) {
-        std::vector<int> beam;
-        beam.push_back(round(it_v->at(0)-it_h->at(0)));
-        beam.push_back(round(it_v->at(1)-it_h->at(0)));
-        beam.push_back(round(it_v->at(2)-it_h->at(0)));
-        beam.push_back(round(it_v->at(3)-it_h->at(0)));
-        beam.push_back(round(it_v->at(0)-it_h->at(1)));
-        beam.push_back(round(it_v->at(1)-it_h->at(1)));
-        beam.push_back(round(it_v->at(2)-it_h->at(1)));
-        beam.push_back(round(it_v->at(3)-it_h->at(1)));
-
-        //std::cout << "L1 Beam:\t" << L1_beams.size()<< "\t" << "Offsets:" << "\t"  << beam.at(0)  << "\t" << beam.at(1) << "\t"<< beam.at(2) << "\t"<< beam.at(3) << "\t"<< beam.at(4)  << "\t" << beam.at(5) << "\t"<< beam.at(6) << "\t"<< beam.at(7) << "\t" <<"\n";
-        L1_beams.push_back(beam);
-      }
-    }
-
-
-  }
-
-
-  ////first variable is vector, each element a vector representing an L2 beam, with 16 delay values in that vector
-  ////second variable is vector, each element a vector representing an L1 beam, with corresponding L2 beams in that vector
-  void generate_beams_L2(std::vector<std::vector<int>> &L2_beams, std::vector<std::vector<int>> &L1_L2_map) {
-    double w1 = 0.6; //horizontal separation in m between 2 adjacent azimuthal sectors
-    double w = 3 * 0.6; //horizontal separation in m between azimuthal sectors furthest apart in L2 sector
-    double h1 = 0.74; //vertical separation between adjacent antennas for lower 3 antennas in a //phi sector
-    double h2 = 3.0; //vertical separation between adjacent antennas between top two antennas in //a given phi sector
-    double h = 2 * h1 + h2;
-    double c = 3e8;
-    double delta_t = 1/(2.6e9); //time between samples, for 2.6Ghz sample frequency
-
-
-    /****
-    * label antennas in L2 sector as below
-    * top
-    * 0  4   8   12
-    * 1  5   9   13
-    * 2  6   10  14
-    * 3  7   11  15
-    * bottom
-    **/
-
-    //vertical separation
-    int v_max = floor((h * sin(50.0 / 180.0 * M_PI))/ (delta_t * c));
-    int v_min = ceil((h * sin(-50.0 / 180.0 * M_PI))/ (delta_t * c));
-
-    std::vector<std::vector<int>> vertical;
-    for (int i = v_min; i < v_max+1; i+=2) {
-      std::vector<int> beam;
-      beam.push_back(0);
-      beam.push_back((i / h * h2));
-      beam.push_back((i / h * (h1+h2)));
-      beam.push_back(i);
-      //std::cout << beam.at(0)  << "\t" << beam.at(1) << "\t"<< beam.at(2) << "\t"<< beam.at(3) << "\t" << "\n";
-      vertical.push_back(beam);
-    }
-
-    //horizontal separation
-    int h_max = floor((w * sin(50.0 / 180.0 * M_PI))/ (delta_t * c));
-    int h_min = ceil((w * sin(-50.0 / 180.0 * M_PI))/ (delta_t * c));
-    std::vector<std::vector<int>> horizontal;
-    for (int i = h_min; i < h_max+1; i+=2) {
-      std::vector<int> beam;
-      beam.push_back(0);
-      beam.push_back((i / 3));
-      beam.push_back((i / 3 * 2));
-      beam.push_back(i);
-      //std::cout << beam.at(0)  << "\t" << beam.at(1) << "\t" << beam.at(2)  << "\t" << beam.at(3) << "\t" <<"\n";
-      horizontal.push_back(beam);
-    }
-
-    //horizontal separation L1
-    int h_max_L1 = floor((w1 * sin(50.0 / 180.0 * M_PI))/ (delta_t * c));
-    int h_min_L1 = ceil((w1 * sin(-50.0 / 180.0 * M_PI))/ (delta_t * c));
-    std::vector<int> horizontal_L1;
-    for (int i = h_min_L1; i < h_max_L1+1; i++) {
-      horizontal_L1.push_back(i);
-      //std::cout << horizontal_L1.at(0)   <<"\n";
-    }
-
-    std::vector<int> empty_map;
-    L1_L2_map = std::vector<std::vector<int>> (vertical.size() * horizontal_L1.size(), empty_map);
-    //std::cout << "L1 L2 map intialised with size " << vertical.size() * horizontal_L1.size()<< "\n";
-
-
-    //combine vertical and horizontal for beams
-
-    int v_counter = 0;
-    //std::cout << "**********L2 Beams**********" <<"\n";
-
-    for (std::vector<std::vector<int>>::iterator it_v = vertical.begin(); it_v != vertical.end(); ++it_v) {
-      for (std::vector<std::vector<int>>::iterator it_h = horizontal.begin(); it_h != horizontal.end(); ++it_h) {
-        std::vector<int> beam;
-        beam.push_back(round(it_v->at(0)-it_h->at(0)));
-        beam.push_back(round(it_v->at(1)-it_h->at(0)));
-        beam.push_back(round(it_v->at(2)-it_h->at(0)));
-        beam.push_back(round(it_v->at(3)-it_h->at(0)));
-        beam.push_back(round(it_v->at(0)-it_h->at(1)));
-        beam.push_back(round(it_v->at(1)-it_h->at(1)));
-        beam.push_back(round(it_v->at(2)-it_h->at(1)));
-        beam.push_back(round(it_v->at(3)-it_h->at(1)));
-        beam.push_back(round(it_v->at(0)-it_h->at(2)));
-        beam.push_back(round(it_v->at(1)-it_h->at(2)));
-        beam.push_back(round(it_v->at(2)-it_h->at(2)));
-        beam.push_back(round(it_v->at(3)-it_h->at(2)));
-        beam.push_back(round(it_v->at(0)-it_h->at(3)));
-        beam.push_back(round(it_v->at(1)-it_h->at(3)));
-        beam.push_back(round(it_v->at(2)-it_h->at(3)));
-        beam.push_back(round(it_v->at(3)-it_h->at(3)));
-
-        //std::cout << "L2 Beam:\t" << L2_beams.size() << "\t" << "Offsets:" << "\t" ;
-        //for (int i = 0; i < beam.size(); i++) {
-        //  std::cout << beam.at(i)  << "\t" ;
-        //}
-        //std::cout <<"\n";
-        L2_beams.push_back(beam);
-
-        //std::cout << "Adding to L1 L2 map" <<"\n";
-        //map L1 beams to L2 beams where the delay between horizontal neighbours are +-1
-        int element_min = std::max(*min_element(horizontal_L1.begin(), horizontal_L1.end()),it_h->at(1)-1);
-        int pos_min = std::distance(horizontal_L1.begin(), std::find(horizontal_L1.begin(), horizontal_L1.end(), element_min));
-
-        int element_max = std::min(*max_element(horizontal_L1.begin(), horizontal_L1.end()),it_h->at(1)+1);
-        int pos_max = std::distance(horizontal_L1.begin(), std::find(horizontal_L1.begin(), horizontal_L1.end(), element_max));
-
-        //std::cout << "matching element ranges: " << element_min << "\t" << element_max  << "\t" << "\n";
-        //std::cout << "matching positions ranges: " << pos_min << "\t" << pos_max  << "\t" << "\n";
-        //std::cout << "matching L1 beams: ";
-        for(int i = v_counter * horizontal_L1.size() + pos_min; i < v_counter * horizontal_L1.size() + pos_max + 1; i++){
-          //std::cout << i << "\t";
-          L1_L2_map.at(i).push_back(L2_beams.size()-1);
-        }
-      }
-      //std::cout << "v_counter" << "\t" << v_counter << "\n";
-      v_counter++;
-
-    }
-
-    //std::cout << "**********L1 L2 Map**********" <<"\n";
-    //for (int i=0; i < L1_L2_map.size(); ++i) {
-    //  std::cout << "L1: " << i << "\t"<< "Mapped L2: " << "\t"  ;
-    //  for (int j=0; j < L1_L2_map.at(i).size(); ++j) {
-    //    std::cout << L1_L2_map.at(i).at(j) << "\t" ;
-    //  }
-    //  std::cout << "\n";
-    //}
-  }
-
-  void newSignal(std::vector<icemc::FTPair> input_signals) {
-    signals.clear();
-    signals_discrete.clear();
-    L2_triggered = false;
-    L1_max_value.clear();
-    L2_max_value.clear();
-    L1_triggered_windows.clear();
-    L1_max_value = std::vector<int>(n_beams_L1);
-    L2_max_value = std::vector<int>(n_beams_L2);
-    
-    for (int i_ant=0; i_ant<n_ant_L2; i_ant++) {
-      TGraph gr = input_signals.at(i_ant).getTimeDomain();
-      signals.push_back(gr);
-    }
-
-    n_samples = signals.at(0).GetN();
-  }
-
-  void digitize(int bits) {
-    int digitise_max = pow(2,bits-1)-1;
-    int digitise_min = -1 * digitise_max;
-
-    std::vector<TGraph>::iterator it_ant;
-    it_ant=signals.begin();
-
-    for (it_ant=signals.begin();it_ant!=signals.end(); ++it_ant) {
-
-      signals_discrete.emplace_back(*it_ant);
-      TGraph *gr_digi = & signals_discrete.back();
-
-      const int n = it_ant->GetN();
-      int yout[n];
-
-      for (int i=0; i<gr_digi->GetN(); i++) {
-        int digitised_y;
-        double scaled_y = gr_digi->GetPointY(i) * scaling;
-        if (scaled_y > digitise_max) {
-          digitised_y = digitise_max;
-        } else if (scaled_y < digitise_min) {
-          digitised_y = digitise_min;
-        } else {
-          digitised_y = round(scaled_y);
-        }
-
-        gr_digi->SetPointY(i,digitised_y );
-      }
-    }
-  }
-
-
-  //writes to vector of L1 triggers; requires defn of make up and relative delay between antennas for L1 beams
-  void l1Trigger(int step, int window, int threshold, int max_shift) {
-
-    //initialise max values to all zeros
-    for(int i_beam=0; i_beam <  n_beams_L1; i_beam += 1) {
-      L1_max_value.at(i_beam) = 0;
-    }
-
-    for(int wind_pos=max_shift; wind_pos < n_samples - max_shift-window -16; wind_pos+=step) {
-      bool window_triggered = false;
-
-      //Do first L1 sector
-      for(int i_beam=0; i_beam <  n_beams_L1; i_beam += 1) {
-        int coherent_sum = 0;
-
-        for (int samp_pos=0; samp_pos < window ; samp_pos +=1){
-          int coherent_sum_sample = 0;
-          for (int i_ant=0; i_ant<n_ant_L1; i_ant+=1) {
-            coherent_sum_sample += signals_discrete.at(L1_ants.at(i_beam).at(i_ant)).GetPointY(wind_pos+samp_pos-L1_beams.at(i_beam).at(i_ant));
-          }
-          int coherent_sum_sqr_sample = coherent_sum_sample * coherent_sum_sample;
-          coherent_sum += coherent_sum_sqr_sample;
-        }
-      
-        if (coherent_sum > threshold) {
-          window_triggered = true;
-
-        }
-        if (coherent_sum > L1_max_value.at(i_beam)){
-          L1_max_value.at(i_beam) = coherent_sum;
-        }
-      
-      }
-
-      //Do second L1 sector
-      for(int i_beam=0; i_beam <  n_beams_L1; i_beam += 1) {
-        int coherent_sum = 0;
-
-        for (int samp_pos=0; samp_pos < window ; samp_pos +=1){
-          int coherent_sum_sample = 0;
-          for (int i_ant=0; i_ant<n_ant_L1; i_ant+=1) {
-            coherent_sum_sample += signals_discrete.at(L1_ants.at(i_beam).at(i_ant)+8).GetPointY(wind_pos+samp_pos-L1_beams.at(i_beam).at(i_ant));
-          }
-          int coherent_sum_sqr_sample = coherent_sum_sample * coherent_sum_sample;
-          coherent_sum += coherent_sum_sqr_sample;
-        }
-      
-        if (coherent_sum > threshold) {
-          //std::cout << "sum=" << coherent_sum;
-          window_triggered = true;
-        }
-        if (coherent_sum > L1_max_value.at(i_beam)){
-          L1_max_value.at(i_beam) = coherent_sum;
-        }
-      
-      }
-
-      //std::cout << "tr=" << window_triggered << "/n";
-      L1_triggered_windows.push_back(window_triggered);
-
-
-    }
-  }
-
-    
-  //outputs boolean of L2 trigger; requires dfn of make up and relative delay between antennas for L2 beams
-  void l2Trigger(int step, int window, int threshold, int max_shift) {
-
-    ////get list of L2 beams that need to be triggered
-    //std::vector<bool> L2_from_L1 (L2_beams.size(), 0);
-    //for (int i = 0; i < L1_triggers.size(); i++) {
-    //  if (L1_triggers.at(i) == true) {
-    //    for (std::vector<int>::iterator j = L1_L2_map.at(i).begin(); j != L1_L2_map.at(i).end(); ++j) {
-    //      L2_from_L1.at(*j) = true;
-    //    }
-    //  }
-    //}
-
-
-    //initialise max values to all zeros
-    for(int i_beam=0; i_beam <  n_beams_L2; i_beam += 1) {
-      L2_max_value.at(i_beam) = 0;
-    }
-
-    int window_count = 0;
-    L2_triggered = false;
-    for(int wind_pos=max_shift; wind_pos < n_samples - max_shift-window -16; wind_pos+=step) {
-      if (L1_triggered_windows.at(window_count) == true) {
-        for(int i_beam=0; i_beam <  n_beams_L2; i_beam += 1) {
-          int coherent_sum = 0;
-          for (int samp_pos=0; samp_pos < window ; samp_pos +=1){
-            int coherent_sum_sample = 0;
-            for (int i_ant=0; i_ant<n_ant_L2; i_ant+=1) {
-              coherent_sum_sample += signals_discrete.at(L2_ants.at(i_beam).at(i_ant)).GetPointY(wind_pos+samp_pos-L2_beams.at(i_beam).at(i_ant));
-            }
-            int coherent_sum_sqr_sample = coherent_sum_sample * coherent_sum_sample;
-            coherent_sum += coherent_sum_sqr_sample;
-          }
-          if (coherent_sum > threshold) {
-            L2_triggered = true;
-          }
-          if (coherent_sum > L2_max_value.at(i_beam)){
-            L2_max_value.at(i_beam) = coherent_sum;
-          }
-        }
-      }
-      window_count++;
-    }
-  }
-};
-
-class triggerThreshold {
-  public:
-    pueoTrigger * ptrigger;
-    std::vector<int> coherent_values;
-    int window_count;
-
-    triggerThreshold() {
-      window_count = 0;
-      ptrigger = new pueoTrigger();
-      
-      //h1 = new TH1D("Histogram for coherent values","Histogram for coherent values",100,0.,5000.);
-    }
-
-    void setTriggerScaling(float multiplier) {
-      ptrigger->setScaling(multiplier);
-    }
-
-    //note: only 1 beam is generated, as otherwise the data points may not be independent. 
-    //note: it's also not a real beam, but this shouldn't matter for our purposes
-    void L1Threshold_addData(std::vector<icemc::FTPair> input_signals) {
-      ptrigger->newSignal(input_signals);
-      ptrigger->digitize(4);
-      
-      int n_samples = ptrigger->signals_discrete.at(0).GetN();
-      int number_ants = 8;  
-      int step = 8;
-      int window = 16;
-      int max_shift = 64;
-
-      for(int wind_pos=max_shift; wind_pos < n_samples - max_shift-window -16; wind_pos+=step) {
-        int coherent_sum = 0;
-        for (int samp_pos=0; samp_pos < window ; samp_pos +=1){
-          int coherent_sum_sample = 0;
-          for (int i_ant=0; i_ant<number_ants; i_ant+=1) {
-            coherent_sum_sample += ptrigger->signals_discrete.at(i_ant).GetPointY(wind_pos+samp_pos);
-          }
-          int coherent_sum_sqr_sample = coherent_sum_sample * coherent_sum_sample;
-          coherent_sum += coherent_sum_sqr_sample;
-        }
-        //samples.push_back(coherent_sum);
-        //h1->Fill(coherent_sum);
-        coherent_values.push_back(coherent_sum);
-        window_count++;
-      }  
-    }
-
-    int L1Threshold_eval() {  
-
-      double stdev =  TMath::StdDev(coherent_values.begin(), coherent_values.end() );
-      double mean =  TMath::Mean(coherent_values.begin(), coherent_values.end() );
-      double size =  coherent_values.size();
-      std::cout << "\nCount = " << size << ", STDeV = " << stdev << ", Mean = " << mean << "\n\n";
-
-      TH1D * h1 = new TH1D("Histogram for L1","Histogram for L1",100,0.,8 * stdev + mean);
-      for (int i = 0; i < coherent_values.size(); i++) {
-        h1->Fill(coherent_values.at(i));
-      }
-
-      TF1 * f1 = new TF1("f1","expo");
-      f1->SetParameters(1,1);
-      h1->Fit("f1","","", mean + 3 * stdev, mean + 7 * stdev);
-      TF1 * fitFunc = h1->GetFunction("f1");
-      //std::cout << "p0=" << fitFunc->GetParameter(0) << " p1=" << fitFunc->GetParameter(1) ;
-      
-      h1->Draw();
-      gPad->SetLogy();
-
-      double sector_rate = 1E6;
-      double sample_rate = 2.949E9;
-      double step = 8;
-
-      
-      return round((std::log(sector_rate * step / sample_rate / ptrigger->n_beams_L1 *  window_count ) - fitFunc->GetParameter(0) ) / fitFunc->GetParameter(1));
-
-    }
-
-    void L2Threshold_addData(std::vector<icemc::FTPair> input_signals, int L1Threshold) {
-      ptrigger->newSignal(input_signals);
-      ptrigger->digitize(4);
-      ptrigger->l1Trigger(8, 16, L1Threshold, 64);
-      
-      int window_count_this_signal = 0;
-
-      int n_samples = ptrigger->signals_discrete.at(0).GetN();
-      int number_ants = 16;  
-      int step = 8;
-      int window = 16;
-      int max_shift = 64;
-
-      for(int wind_pos=max_shift; wind_pos < n_samples - max_shift-window -16; wind_pos+=step) {
-
-        if (ptrigger->L1_triggered_windows.at(window_count_this_signal) == true) {
-          int coherent_sum_max = 0;
-          for(int i_beam=0; i_beam <  ptrigger->n_beams_L2; i_beam += 1) {
-            int coherent_sum = 0;
-            for (int samp_pos=0; samp_pos < window ; samp_pos +=1){
-              int coherent_sum_sample = 0;
-              for (int i_ant=0; i_ant<number_ants; i_ant+=1) {
-                coherent_sum_sample += ptrigger->signals_discrete.at(ptrigger->L2_ants.at(i_beam).at(i_ant)).GetPointY(wind_pos+samp_pos-ptrigger->L2_beams.at(i_beam).at(i_ant));
-              }
-              int coherent_sum_sqr_sample = coherent_sum_sample * coherent_sum_sample;
-              coherent_sum += coherent_sum_sqr_sample;
-            }
-            if (coherent_sum > coherent_sum_max) {
-              coherent_sum_max = coherent_sum;
-            }
-          }
-          //h1->Fill(coherent_sum_max);
-          coherent_values.push_back(coherent_sum_max);
-        }
-        window_count_this_signal++;
-        window_count++;
-      }
-    }
-
-    int L2Threshold_eval() {  
-
-      double stdev =  TMath::StdDev(coherent_values.begin(), coherent_values.end() );
-      double mean =  TMath::Mean(coherent_values.begin(), coherent_values.end() );
-      double size =  coherent_values.size();
-      std::cout << "\nCount = " << size << ", STDeV = " << stdev << ", Mean = " << mean << "\n\n";
-
-      TH1D * h1 = new TH1D("Histogram for L2","Histogram for L2",100,0.,8 * stdev + mean);
-      for (int i = 0; i < coherent_values.size(); i++) {
-        h1->Fill(coherent_values.at(i));
-      }
-
-      TF1 * f1 = new TF1("f1","expo");
-      f1->SetParameters(1,1);
-      h1->Fit("f1","","", mean + 1 * stdev, mean + 6 * stdev);
-      TF1 * fitFunc = h1->GetFunction("f1");
-      //std::cout << "p0=" << fitFunc->GetParameter(0) << " p1=" << fitFunc->GetParameter(1) ;
-
-      double sector_rate = 12;
-      double sample_rate = 2.949E9;
-      double step = 8;
-      int l2threshold = round((std::log(sector_rate * step / sample_rate *  window_count ) - fitFunc->GetParameter(0) ) / fitFunc->GetParameter(1));
-      //std::cout<< "\n" << "L2 threshold " << l2threshold << "\n";
-
-      h1->Draw();
-      gPad->SetLogy();
-    
-
-      return l2threshold;
-    }
-
-};
 
 double e_field(double theta_offcone, double freq, double normalisation ) {
   if (freq < 1 || freq > 2000) {
@@ -978,7 +378,7 @@ TGraph * combine_noise_zero_signal(double noise[], int size, double multiplier, 
   //return noise_tgraph;
 }
 
-std::vector<icemc::FTPair> signal_gen(std::mt19937& gen, double snr, int n_samples, bool noise_only) {
+std::vector<nicemc::FTPair> signal_gen(std::mt19937& gen, double snr, int n_samples, bool noise_only) {
 
   //choosing source
   double theta = 10.0 / 180.0 * M_PI;
@@ -986,7 +386,7 @@ std::vector<icemc::FTPair> signal_gen(std::mt19937& gen, double snr, int n_sampl
 
 
   //initialising antenna data
-  double x[n_samples], y[pueoTrigger::n_ant_L2][n_samples];
+  double x[n_samples], y[pueoSim::pueoTrigger::n_ant_L2][n_samples];
   double std = 6;
   double pos = n_samples /2;
   double peak = 16;
@@ -1071,11 +471,11 @@ std::vector<icemc::FTPair> signal_gen(std::mt19937& gen, double snr, int n_sampl
   delete[] received_signal_pre_interp;
 
 
-  std::vector<icemc::FTPair> generated_signals ;
+  std::vector<nicemc::FTPair> generated_signals ;
 
-  for (int i_ant=0; i_ant<pueoTrigger::n_ant_L2; i_ant++) {
+  for (int i_ant=0; i_ant<pueoSim::pueoTrigger::n_ant_L2; i_ant++) {
     TGraph gr = TGraph (n_samples, x, y[i_ant]);
-    icemc::FTPair ftp(gr);
+    nicemc::FTPair ftp(gr);
     generated_signals.push_back(ftp);
   }
 
@@ -1089,8 +489,8 @@ void visualiseTrigger(int argc, char **argv, int L1_threshold, int L2_threshold,
   std::random_device rd;  // Will be used to obtain a seed for the random number engine
   std::mt19937 gen(rd()); // Standard mersenne_twister_engine seeded with rd()
 
-  std::vector<icemc::FTPair> internally_generated_signal = signal_gen(gen, snr, 512, false);
-  pueoTrigger ptrigger(internally_generated_signal);
+  std::vector<nicemc::FTPair> internally_generated_signal = signal_gen(gen, snr, 512, false);
+  pueoSim::pueoTrigger ptrigger(internally_generated_signal);
   
   std::cout.precision(5);
 
@@ -1259,8 +659,7 @@ void visualiseTrigger(int argc, char **argv, int L1_threshold, int L2_threshold,
 
   app.Run();
 
-}
-
+}  
 int main(int argc, char **argv) {
   
   //setting up random numbers for closed loop noise generation
@@ -1276,14 +675,14 @@ int main(int argc, char **argv) {
   TApplication app("app", &argc, argv); //interactive plots for reviewing threshold eval. Also needs app.Run() later
   //L1 threshold evaluation - at least 1E4 iterations; fast
 
-  std::vector<icemc::FTPair> noise_export = signal_gen(gen, .0, 512, true);
+  std::vector<nicemc::FTPair> noise_export = signal_gen(gen, .0, 512, true);
   TGraph gr = noise_export.at(1).getTimeDomain();
   gr.SaveAs("exportNoise.csv",".csv");
 
 
   std::cout<< "\n" << "--L1 threshold evaluation--" << "\n";
   repeats = 1E3;
-  triggerThreshold * tThresholdL1 = new triggerThreshold();
+  pueoSim::triggerThreshold * tThresholdL1 = new pueoSim::triggerThreshold();
   tThresholdL1->setTriggerScaling(1.0);
   for (int r=0; r< repeats ; r++) {
     //replace signal_gen with pueoSim noise, no signal, vector of 16 FTPairs, each 512 samples
@@ -1300,7 +699,7 @@ int main(int argc, char **argv) {
   //L2 threshold evaluation - should be at least 1E4; slow 
   std::cout<< "\n" << "--L2 threshold evaluation--" << "\n";
   repeats = 1E2;
-  triggerThreshold * tThresholdL2 = new triggerThreshold();
+  pueoSim::triggerThreshold * tThresholdL2 = new pueoSim::triggerThreshold();
   tThresholdL2->setTriggerScaling(1.0);
   for (int r=0; r< repeats ; r++) {
     //replace signal_gen with pueoSim noise, no signal, vector of 16 FTPairs, each 512 samples
@@ -1320,7 +719,7 @@ int main(int argc, char **argv) {
   int total_pueo_runs = 100;
   double snr = 1.0;
   int L2_triggered_count = 0;
-  pueoTrigger * ptrigger = new pueoTrigger();
+  pueoSim::pueoTrigger * ptrigger = new pueoSim::pueoTrigger();
   ptrigger->setScaling(1.1);
   for(int run = 0; run < total_pueo_runs; run++ ) {
     //replace signal_gen with pueoSim signal+noise,vector of 16 FTPairs, each 512 samples     

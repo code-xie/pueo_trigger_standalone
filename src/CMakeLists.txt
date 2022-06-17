@@ -10,6 +10,7 @@
    find_package(ROOT 6.20 CONFIG REQUIRED)
    #find_package(FFTW REQUIRED)
 #   include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
+   include_directories(${PROJECT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/include )
 include("${ROOT_USE_FILE}")
 separate_arguments(ROOT_EXE_LINKER_FLAGS)
 
@@ -33,12 +34,14 @@ separate_arguments(ROOT_EXE_LINKER_FLAGS)
 #   target_link_libraries(Event PUBLIC ROOT::RIO ROOT::Net)
 
 # Create the main program using the library.
-   add_executable(Main PueoTrigger_standalone.cc)
-   target_sources(Main PRIVATE FTPair.cc)
-   target_link_libraries(Main PUBLIC fftw3 fftw ROOT::Core ROOT::Tree ROOT::Graf3d ROOT::Graf ROOT::Hist) 
+#   set(SOURCES FTPair.cc trigger_shared.cc ${CMAKE_SOURCE_DIR}/include/trigger.h)
+#   target_sources(triggerStandalone PRIVATE FTPair.cc trigger_standalone.cc)
+   add_executable(triggerStandalone trigger_standalone.cc)
+   target_include_directories(triggerStandalone PRIVATE ${CMAKE_SOURCE_DIR}/include)
+   target_sources(triggerStandalone PRIVATE FTPair.cc trigger_shared.cc)
+   target_link_libraries(triggerStandalone PUBLIC fftw3 fftw ROOT::Core ROOT::Tree ROOT::Graf3d ROOT::Graf ROOT::Hist) 
    #target_link_libraries(Main PUBLIC fftw3 fftw ROOT::Core ROOT::MathCore ROOT::Gpad ROOT::Graf3d ROOT::Graf ROOT::Hist ROOT::Imt ROOT::Matrix ROOT::Net ROOT::Physics ROOT::RIO ROOT::ROOTDataFrame ROOT::ROOTVecOps ROOT::Rint ROOT::Thread ROOT::TreePlayer ROOT::Tree) 
 
 
 
-target_link_libraries(Main PUBLIC ${ROOT_LIBRARIES}
-                                                ${ROOT_EXE_LINKER_FLAGS})
+   target_link_libraries(triggerStandalone PUBLIC ${ROOT_LIBRARIES} ${ROOT_EXE_LINKER_FLAGS})
