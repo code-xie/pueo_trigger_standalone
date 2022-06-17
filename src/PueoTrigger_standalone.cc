@@ -36,6 +36,7 @@ class pueoTrigger {
     int n_beams_L2;
     std::vector<bool> L1_triggered_windows;
     bool L2_triggered = false;
+    float scaling = 1.0;
 
     std::vector<int> L1_max_value;
     std::vector<int> L2_max_value;
@@ -113,11 +114,14 @@ class pueoTrigger {
 
     }
 
+  void setScaling(float multiplier) {
+    scaling = multiplier;
+  }
     
   void generate_beams_L1(std::vector<std::vector<int>> &L1_beams) {
     double w1 = 0.6; //horizontal separation in m between 2 phi sectors
-    double h1 = 0.6; //vertical separation between adjacent antennas for lower 3 antennas in a phi sector
-    double h2 = 2.8; //vertical separation between adjacent antennas between top two antennas in a given phi sector
+    double h1 = 0.74; //vertical separation between adjacent antennas for lower 3 antennas in a phi sector
+    double h2 = 3.0; //vertical separation between adjacent antennas between top two antennas in a given phi sector
     double h = 2 * h1 + h2;
     double c = 3e8;
     double delta_t = 1/(2.6e9); //time between samples, for 2.6Ghz sample frequency
@@ -137,7 +141,7 @@ class pueoTrigger {
     int v_min = ceil((h * sin(-50.0 / 180.0 * M_PI))/ (delta_t * c));
 
     std::vector<std::vector<int>> vertical;
-    for (int i = v_min; i < v_max+1; i++) {
+    for (int i = v_min; i < v_max+1; i+=2) {
       std::vector<int> beam;
       beam.push_back(0);
       beam.push_back((i / h * h2));
@@ -151,7 +155,7 @@ class pueoTrigger {
     int h_max = floor((w1 * sin(50.0 / 180.0 * M_PI))/ (delta_t * c));
     int h_min = ceil((w1 * sin(-50.0 / 180.0 * M_PI))/ (delta_t * c));
     std::vector<std::vector<int>> horizontal;
-    for (int i = h_min; i < h_max+1; i++) {
+    for (int i = h_min; i < h_max+1; i+=1) {
       std::vector<int> beam;
       beam.push_back(0);
       beam.push_back(i);
@@ -187,10 +191,10 @@ class pueoTrigger {
   ////first variable is vector, each element a vector representing an L2 beam, with 16 delay values in that vector
   ////second variable is vector, each element a vector representing an L1 beam, with corresponding L2 beams in that vector
   void generate_beams_L2(std::vector<std::vector<int>> &L2_beams, std::vector<std::vector<int>> &L1_L2_map) {
-    double w1 = 0.6; //horizontal separation in m between 2 phi sectors
-    double w = 3 * 0.6; //horizontal separation in m between 2 phi sectors
-    double h1 = 0.6; //vertical separation between adjacent antennas for lower 3 antennas in a //phi sector
-    double h2 = 2.8; //vertical separation between adjacent antennas between top two antennas in //a given phi sector
+    double w1 = 0.6; //horizontal separation in m between 2 adjacent azimuthal sectors
+    double w = 3 * 0.6; //horizontal separation in m between azimuthal sectors furthest apart in L2 sector
+    double h1 = 0.74; //vertical separation between adjacent antennas for lower 3 antennas in a //phi sector
+    double h2 = 3.0; //vertical separation between adjacent antennas between top two antennas in //a given phi sector
     double h = 2 * h1 + h2;
     double c = 3e8;
     double delta_t = 1/(2.6e9); //time between samples, for 2.6Ghz sample frequency
@@ -211,7 +215,7 @@ class pueoTrigger {
     int v_min = ceil((h * sin(-50.0 / 180.0 * M_PI))/ (delta_t * c));
 
     std::vector<std::vector<int>> vertical;
-    for (int i = v_min; i < v_max+1; i++) {
+    for (int i = v_min; i < v_max+1; i+=2) {
       std::vector<int> beam;
       beam.push_back(0);
       beam.push_back((i / h * h2));
@@ -225,7 +229,7 @@ class pueoTrigger {
     int h_max = floor((w * sin(50.0 / 180.0 * M_PI))/ (delta_t * c));
     int h_min = ceil((w * sin(-50.0 / 180.0 * M_PI))/ (delta_t * c));
     std::vector<std::vector<int>> horizontal;
-    for (int i = h_min; i < h_max+1; i++) {
+    for (int i = h_min; i < h_max+1; i+=2) {
       std::vector<int> beam;
       beam.push_back(0);
       beam.push_back((i / 3));
@@ -330,7 +334,7 @@ class pueoTrigger {
     n_samples = signals.at(0).GetN();
   }
 
-  void digitize(int bits, double multiplier) {
+  void digitize(int bits) {
     int digitise_max = pow(2,bits-1)-1;
     int digitise_min = -1 * digitise_max;
 
@@ -347,7 +351,7 @@ class pueoTrigger {
 
       for (int i=0; i<gr_digi->GetN(); i++) {
         int digitised_y;
-        double scaled_y = gr_digi->GetPointY(i) * multiplier;
+        double scaled_y = gr_digi->GetPointY(i) * scaling;
         if (scaled_y > digitise_max) {
           digitised_y = digitise_max;
         } else if (scaled_y < digitise_min) {
@@ -486,9 +490,15 @@ class triggerThreshold {
       //h1 = new TH1D("Histogram for coherent values","Histogram for coherent values",100,0.,5000.);
     }
 
+    void setTriggerScaling(float multiplier) {
+      ptrigger->setScaling(multiplier);
+    }
+
+    //note: only 1 beam is generated, as otherwise the data points may not be independent. 
+    //note: it's also not a real beam, but this shouldn't matter for our purposes
     void L1Threshold_addData(std::vector<icemc::FTPair> input_signals) {
       ptrigger->newSignal(input_signals);
-      ptrigger->digitize(4, pow(2,0));
+      ptrigger->digitize(4);
       
       int n_samples = ptrigger->signals_discrete.at(0).GetN();
       int number_ants = 8;  
@@ -527,7 +537,7 @@ class triggerThreshold {
 
       TF1 * f1 = new TF1("f1","expo");
       f1->SetParameters(1,1);
-      h1->Fit("f1","","", mean + 3 * stdev, mean + 5 * stdev);
+      h1->Fit("f1","","", mean + 3 * stdev, mean + 7 * stdev);
       TF1 * fitFunc = h1->GetFunction("f1");
       //std::cout << "p0=" << fitFunc->GetParameter(0) << " p1=" << fitFunc->GetParameter(1) ;
       
@@ -538,13 +548,14 @@ class triggerThreshold {
       double sample_rate = 2.949E9;
       double step = 8;
 
+      
       return round((std::log(sector_rate * step / sample_rate / ptrigger->n_beams_L1 *  window_count ) - fitFunc->GetParameter(0) ) / fitFunc->GetParameter(1));
 
     }
 
     void L2Threshold_addData(std::vector<icemc::FTPair> input_signals, int L1Threshold) {
       ptrigger->newSignal(input_signals);
-      ptrigger->digitize(4, pow(2,0));
+      ptrigger->digitize(4);
       ptrigger->l1Trigger(8, 16, L1Threshold, 64);
       
       int window_count_this_signal = 0;
@@ -595,7 +606,7 @@ class triggerThreshold {
 
       TF1 * f1 = new TF1("f1","expo");
       f1->SetParameters(1,1);
-      h1->Fit("f1","","", mean + 1 * stdev, mean + 4 * stdev);
+      h1->Fit("f1","","", mean + 1 * stdev, mean + 6 * stdev);
       TF1 * fitFunc = h1->GetFunction("f1");
       //std::cout << "p0=" << fitFunc->GetParameter(0) << " p1=" << fitFunc->GetParameter(1) ;
 
@@ -980,10 +991,11 @@ std::vector<icemc::FTPair> signal_gen(std::mt19937& gen, double snr, int n_sampl
   double pos = n_samples /2;
   double peak = 16;
 
-  double w1 = 0.6; //horizontal separation in m between 2 phi sectors
-  double w = 3 * 0.6; //horizontal separation in m between 2 phi sectors
-  double h1 = 0.6; //vertical separation between adjacent antennas for lower 3 antennas in a //phi sector
-  double h2 = 2.8; //vertical separation between adjacent antennas between top two antennas in //a given phi sector
+
+  double w1 = 0.6; //horizontal separation in m between 2 adjacent azimuthal sectors
+  double w = 3 * 0.6; //horizontal separation in m between azimuthal sectors furthest apart in L2 sector
+  double h1 = 0.74; //vertical separation between adjacent antennas for lower 3 antennas in a //phi sector
+  double h2 = 3.0; //vertical separation between adjacent antennas between top two antennas in //a given phi sector
   double h = 2 * h1 + h2;
   double c = 3e8;
   double delta_t = 1/(2.6e9); //time between samples, for 2.6Ghz sample frequency
@@ -1099,7 +1111,7 @@ void visualiseTrigger(int argc, char **argv, int L1_threshold, int L2_threshold,
 
 
   //create digitised data
-  ptrigger.digitize(4, pow(2,0));
+  ptrigger.digitize(4);
 
   //Plot digitised signals data
   TCanvas *c_digi = new TCanvas("c_digi","Discrete antenna data",500,500,600,400);
@@ -1138,10 +1150,11 @@ void visualiseTrigger(int argc, char **argv, int L1_threshold, int L2_threshold,
 
 
   //visual represent triggers - L1
-  double w1 = 0.6; //horizontal separation in m between 2 phi sectors
-  double w = 3 * 0.6; //horizontal separation in m between 2 phi sectors
-  double h1 = 0.6; //vertical separation between adjacent antennas for lower 3 antennas in a //phi sector
-  double h2 = 2.8; //vertical separation between adjacent antennas between top two antennas in //a given phi sector
+
+  double w1 = 0.6; //horizontal separation in m between 2 adjacent azimuthal sectors
+  double w = 3 * 0.6; //horizontal separation in m between azimuthal sectors furthest apart in L2 sector
+  double h1 = 0.74; //vertical separation between adjacent antennas for lower 3 antennas in a //phi sector
+  double h2 = 3.0; //vertical separation between adjacent antennas between top two antennas in //a given phi sector
   double h = 2 * h1 + h2;
   double c = 3e8;
   double delta_t = 1/(2.6e9); //time between samples, for 2.6Ghz sample frequency
@@ -1254,29 +1267,41 @@ int main(int argc, char **argv) {
   std::random_device rd;  // Will be used to obtain a seed for the random number engine
   std::mt19937 gen(rd()); // Standard mersenne_twister_engine seeded with rd()
 
-  //TApplication app("app", &argc, argv); //interactive plots for reviewing threshold eval. Also needs app.Run() later
-
-  int l1threshold;
-  int l2threshold;
+  
+  
+  int l1threshold = 368;
+  int l2threshold = 1306;
   int repeats;
 
+  TApplication app("app", &argc, argv); //interactive plots for reviewing threshold eval. Also needs app.Run() later
   //L1 threshold evaluation - at least 1E4 iterations; fast
+
+  std::vector<icemc::FTPair> noise_export = signal_gen(gen, .0, 512, true);
+  TGraph gr = noise_export.at(1).getTimeDomain();
+  gr.SaveAs("exportNoise.csv",".csv");
+
+
   std::cout<< "\n" << "--L1 threshold evaluation--" << "\n";
-  repeats = 1E4;
+  repeats = 1E3;
   triggerThreshold * tThresholdL1 = new triggerThreshold();
+  tThresholdL1->setTriggerScaling(1.0);
   for (int r=0; r< repeats ; r++) {
     //replace signal_gen with pueoSim noise, no signal, vector of 16 FTPairs, each 512 samples
     tThresholdL1->L1Threshold_addData(signal_gen(gen, .0, 512, true));
+    if (r % (repeats/10) == 0) {
+      std::cout << "L1 iteration " << r << " done" << "\n";
+    }
   }
   l1threshold = tThresholdL1->L1Threshold_eval();
   std::cout<< "\n\n" << "L1 threshold set to " << l1threshold << "\n";
   delete tThresholdL1;
 
-  
+  app.Run(); //interactive plots for reviewing threshold eval
   //L2 threshold evaluation - should be at least 1E4; slow 
   std::cout<< "\n" << "--L2 threshold evaluation--" << "\n";
-  repeats = 1E4;
+  repeats = 1E2;
   triggerThreshold * tThresholdL2 = new triggerThreshold();
+  tThresholdL2->setTriggerScaling(1.0);
   for (int r=0; r< repeats ; r++) {
     //replace signal_gen with pueoSim noise, no signal, vector of 16 FTPairs, each 512 samples
     tThresholdL2->L2Threshold_addData(signal_gen(gen, .0, 512, true), l1threshold);
@@ -1288,16 +1313,19 @@ int main(int argc, char **argv) {
   std::cout<< "\n" << "L2 threshold set to " << l2threshold << "\n";
   delete tThresholdL2;
 
+  app.Run(); //interactive plots for reviewing threshold eval
+
   //Do runs of trigger with the evaluated thresholds 
   std::cout<< "\n" << "--Trigger on signals with evaluated threshold--" << "\n";
   int total_pueo_runs = 100;
   double snr = 1.0;
   int L2_triggered_count = 0;
   pueoTrigger * ptrigger = new pueoTrigger();
+  ptrigger->setScaling(1.1);
   for(int run = 0; run < total_pueo_runs; run++ ) {
     //replace signal_gen with pueoSim signal+noise,vector of 16 FTPairs, each 512 samples     
     ptrigger->newSignal(signal_gen(gen, snr, 512, false));
-    ptrigger->digitize(4, pow(2,0));
+    ptrigger->digitize(4);
     ptrigger->l1Trigger(8, 16, l1threshold, 64); //args: ptrigger, step, window, threshold, edge size
     ptrigger->l2Trigger(8, 16, l2threshold, 64); //args: ptrigger, step, window, threshold, edge size
     if (ptrigger->L2_triggered == true) {
