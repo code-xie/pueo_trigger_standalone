@@ -7,7 +7,7 @@
 #include "TF1.h"
 #include "trigger.h"
 
-pueoSim::pueoTrigger::pueoTrigger(){
+pueoSim::pueoTrigger::pueoTrigger(float samplingFreqHz_input){
   generate_beams_L1(L1_beams);
   n_beams_L1 = L1_beams.size();
   std::vector<int> antennas_L1 = {0,1,2,3,4,5,6,7};
@@ -22,6 +22,7 @@ pueoSim::pueoTrigger::pueoTrigger(){
 	L2_ants.push_back(antennas_L2);
   }
 
+  samplingFreqHz = samplingFreqHz_input;
 
   //reenable cout
   std::cout.clear();
@@ -31,42 +32,6 @@ pueoSim::pueoTrigger::pueoTrigger(){
 
 }
 
-pueoSim::pueoTrigger::pueoTrigger(std::vector<nicemc::FTPair> input_signals) {
-  for (int i_ant=0; i_ant<n_ant_L2; i_ant++) {
-	TGraph gr = input_signals.at(i_ant).getTimeDomain();
-	signals.push_back(gr);
-  }
-  n_samples = signals.at(0).GetN();
-
-  generate_beams_L1(L1_beams);
-  n_beams_L1 = L1_beams.size();
-  std::vector<int> antennas_L1 = {0,1,2,3,4,5,6,7};
-  for (int i=0; i<n_beams_L1; i++) {
-	L1_ants.push_back(antennas_L1);
-  }
-
-  generate_beams_L2(L2_beams, L1_L2_map);
-  n_beams_L2 = L2_beams.size();
-  std::vector<int> antennas_L2 = {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15};
-  for (int i=0; i<n_beams_L2; i++) {
-	L2_ants.push_back(antennas_L2);
-  }
-
-  L1_max_value.clear();
-  L2_max_value.clear();
-  L1_triggered_windows.clear();
-  L1_max_value = std::vector<int>(n_beams_L1);
-  L2_max_value = std::vector<int>(n_beams_L2);
-
-
-  //reenable cout
-  std::cout.clear();
-  std::cout.precision(5);
-
-  std::cout << "\n" <<"pueoTrigger initialised with " <<  n_beams_L1 << " L1 beams, " <<  n_beams_L2 <<" L2 beams" << "\n";
-
-
-}
 
 void pueoSim::pueoTrigger::setScaling(float multiplier) {
   scaling = multiplier;
@@ -426,14 +391,14 @@ void pueoSim::pueoTrigger::l2Trigger(int step, int window, int threshold, int ma
   }
 }
 
-pueoSim::triggerThreshold::triggerThreshold() {
+pueoSim::triggerThreshold::triggerThreshold(float samplingFreqHz_input) {
   window_count = 0;
-  ptrigger = new pueoTrigger();
+  ptrigger = new pueoTrigger(samplingFreqHz_input);
   
   //h1 = new TH1D("Histogram for coherent values","Histogram for coherent values",100,0.,5000.);
 }
 
-    void setTriggerScaling(float multiplier) {
+void pueoSim::triggerThreshold::setTriggerScaling(float multiplier) {
   ptrigger->setScaling(multiplier);
 }
 

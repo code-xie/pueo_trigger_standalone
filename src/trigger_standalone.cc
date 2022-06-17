@@ -490,7 +490,8 @@ void visualiseTrigger(int argc, char **argv, int L1_threshold, int L2_threshold,
   std::mt19937 gen(rd()); // Standard mersenne_twister_engine seeded with rd()
 
   std::vector<nicemc::FTPair> internally_generated_signal = signal_gen(gen, snr, 512, false);
-  pueoSim::pueoTrigger ptrigger(internally_generated_signal);
+  pueoSim::pueoTrigger * ptrigger = new pueoSim::pueoTrigger(2.56E9);
+  ptrigger->newSignal(internally_generated_signal);
   
   std::cout.precision(5);
 
@@ -511,16 +512,16 @@ void visualiseTrigger(int argc, char **argv, int L1_threshold, int L2_threshold,
 
 
   //create digitised data
-  ptrigger.digitize(4);
+  ptrigger->digitize(4);
 
   //Plot digitised signals data
   TCanvas *c_digi = new TCanvas("c_digi","Discrete antenna data",500,500,600,400);
   TMultiGraph *mg = new TMultiGraph();
   //std::cout << "Digitised data:" << "\n";
-  for (std::vector<TGraph>::iterator it=ptrigger.signals_discrete.begin();it!=ptrigger.signals_discrete.end(); ++it) {
+  for (std::vector<TGraph>::iterator it=ptrigger->signals_discrete.begin();it!=ptrigger->signals_discrete.end(); ++it) {
     TGraph * gr3 = new TGraph(*it);
-    gr3->SetTitle(std::to_string(it - ptrigger.signals_discrete.begin()).c_str());
-    gr3->SetLineColor(it - ptrigger.signals_discrete.begin() + 1);
+    gr3->SetTitle(std::to_string(it - ptrigger->signals_discrete.begin()).c_str());
+    gr3->SetLineColor(it - ptrigger->signals_discrete.begin() + 1);
     mg->Add(gr3);
   }
   c_digi->cd();
@@ -529,10 +530,10 @@ void visualiseTrigger(int argc, char **argv, int L1_threshold, int L2_threshold,
 
 
   //do L1 trigger
-  ptrigger.l1Trigger(8, 16, L1_threshold, 64); //args: ptrigger, step, window, threshold, edge size
+  ptrigger->l1Trigger(8, 16, L1_threshold, 64); //args: ptrigger, step, window, threshold, edge size
 
   //do L2 trigger
-  ptrigger.l2Trigger(8, 16, L2_threshold, 64); //args: ptrigger, step, window, threshold, edge size
+  ptrigger->l2Trigger(8, 16, L2_threshold, 64); //args: ptrigger, step, window, threshold, edge size
 
   //print L1 triggers
   //std::cout << "L1 Triggers" <<"\n";
@@ -581,7 +582,7 @@ void visualiseTrigger(int argc, char **argv, int L1_threshold, int L2_threshold,
      //std::cout << asin(i * (delta_t * c) / h) / M_PI * 180 << "\t\t";
       for (int j = h_min; j < h_max+1; j++) {
             //std::cout << ptrigger.L1_max_value[beam_L1_count] << "\t";
-            dt_L1->SetPoint(beam_L1_count,asin(i * (delta_t * c) / h) / M_PI * 180, asin(j * (delta_t * c) / w1) / M_PI * 180,  ptrigger.L1_max_value[beam_L1_count]);
+            dt_L1->SetPoint(beam_L1_count,asin(i * (delta_t * c) / h) / M_PI * 180, asin(j * (delta_t * c) / w1) / M_PI * 180,  ptrigger->L1_max_value[beam_L1_count]);
             beam_L1_count++;
       }
       //std::cout << "\n";
@@ -626,7 +627,7 @@ void visualiseTrigger(int argc, char **argv, int L1_threshold, int L2_threshold,
      //std::cout << asin(i * (delta_t * c) / h) / M_PI * 180 << "\t\t";
       for (int j = h_min; j < h_max+1; j++) {
             //std::cout << ptrigger.L2_max_value[beam_L2_count] << "\t";
-            dt_L2->SetPoint(beam_L2_count,asin(i * (delta_t * c) / h) / M_PI * 180, asin(j * (delta_t * c) / w) / M_PI * 180,  ptrigger.L2_max_value[beam_L2_count]);
+            dt_L2->SetPoint(beam_L2_count,asin(i * (delta_t * c) / h) / M_PI * 180, asin(j * (delta_t * c) / w) / M_PI * 180,  ptrigger->L2_max_value[beam_L2_count]);
             beam_L2_count++;
       }
      //std::cout << "\n";
@@ -671,6 +672,7 @@ int main(int argc, char **argv) {
   int l1threshold = 368;
   int l2threshold = 1306;
   int repeats;
+  float samplingFreqHz = 2.56E9;
 
   TApplication app("app", &argc, argv); //interactive plots for reviewing threshold eval. Also needs app.Run() later
   //L1 threshold evaluation - at least 1E4 iterations; fast
@@ -682,7 +684,7 @@ int main(int argc, char **argv) {
 
   std::cout<< "\n" << "--L1 threshold evaluation--" << "\n";
   repeats = 1E3;
-  pueoSim::triggerThreshold * tThresholdL1 = new pueoSim::triggerThreshold();
+  pueoSim::triggerThreshold * tThresholdL1 = new pueoSim::triggerThreshold(samplingFreqHz);
   tThresholdL1->setTriggerScaling(1.0);
   for (int r=0; r< repeats ; r++) {
     //replace signal_gen with pueoSim noise, no signal, vector of 16 FTPairs, each 512 samples
@@ -699,7 +701,7 @@ int main(int argc, char **argv) {
   //L2 threshold evaluation - should be at least 1E4; slow 
   std::cout<< "\n" << "--L2 threshold evaluation--" << "\n";
   repeats = 1E2;
-  pueoSim::triggerThreshold * tThresholdL2 = new pueoSim::triggerThreshold();
+  pueoSim::triggerThreshold * tThresholdL2 = new pueoSim::triggerThreshold(samplingFreqHz);
   tThresholdL2->setTriggerScaling(1.0);
   for (int r=0; r< repeats ; r++) {
     //replace signal_gen with pueoSim noise, no signal, vector of 16 FTPairs, each 512 samples
@@ -719,7 +721,7 @@ int main(int argc, char **argv) {
   int total_pueo_runs = 100;
   double snr = 1.0;
   int L2_triggered_count = 0;
-  pueoSim::pueoTrigger * ptrigger = new pueoSim::pueoTrigger();
+  pueoSim::pueoTrigger * ptrigger = new pueoSim::pueoTrigger(samplingFreqHz);
   ptrigger->setScaling(1.1);
   for(int run = 0; run < total_pueo_runs; run++ ) {
     //replace signal_gen with pueoSim signal+noise,vector of 16 FTPairs, each 512 samples     

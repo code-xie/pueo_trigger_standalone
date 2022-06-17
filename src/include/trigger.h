@@ -33,8 +33,7 @@ namespace pueoSim {
 
   class pueoTrigger {
   public:
-    pueoTrigger();
-    pueoTrigger(std::vector<nicemc::FTPair> input_signals);
+    pueoTrigger(float samplingFreqHz_input);
 
     static const int n_ant_L1=8;
     static const int n_ant_L2=16;
@@ -45,6 +44,7 @@ namespace pueoSim {
     std::vector<bool> L1_triggered_windows;
     bool L2_triggered = false;
     float scaling = 1.0;
+    float samplingFreqHz;
 
     std::vector<int> L1_max_value;
     std::vector<int> L2_max_value;
@@ -81,7 +81,7 @@ namespace pueoSim {
 
   class triggerThreshold {
     public:
-        triggerThreshold();
+        triggerThreshold(float samplingFreqHz_input);
 
 
         pueoTrigger * ptrigger;
