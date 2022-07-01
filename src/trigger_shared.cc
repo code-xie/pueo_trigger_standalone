@@ -8,6 +8,8 @@
 #include "trigger.h"
 
 pueoSim::pueoTrigger::pueoTrigger(float samplingFreqHz_input){
+  get_beamsL1_simpleSeparation(L1_beams);
+
   generate_beams_L1(L1_beams);
   n_beams_L1 = L1_beams.size();
   std::vector<int> antennas_L1 = {0,1,2,3,4,5,6,7};
@@ -29,12 +31,32 @@ pueoSim::pueoTrigger::pueoTrigger(float samplingFreqHz_input){
   std::cout.precision(5);
 
   std::cout << "\n" <<"pueoTrigger initialised with " <<  n_beams_L1 << " L1 beams, " <<  n_beams_L2 <<" L2 beams" << "\n";
-
 }
 
 
 void pueoSim::pueoTrigger::setScaling(float multiplier) {
   scaling = multiplier;
+}
+
+
+//Define beams at given intervals of deltaPhi and deltaTheta
+void pueoSim::pueoTrigger::get_beamsL1_simpleSeparation(std::vector<std::vector<int>> &L1_beams) {
+  gErrorIgnoreLevel = kError; // Suppress warnings as top two lines not read from photogrammetry file
+  TTree *tree = new TTree("ntuple","data from csv file");
+  tree->ReadFile("../data/pueoPhotogrammetry_220617.csv","An:X(in):Y(in):Z(in):HorizDist(in):AzCenter(deg):AperAz(deg):AperElev(deg):AntSize(in):description/C",',');
+  gErrorIgnoreLevel = kPrint;
+
+  //TTreeReader myReader("ntuple", tree);
+  //TTreeReaderValue<Float_t> myPx(myReader, "An");
+
+  Float_t An, X, Y;
+  tree->SetBranchAddress("An",&An);
+
+  //for (int i = 0, N = tree->GetEntries(); i < N; ++i) {
+  //  tree->GetEntry(i) ;
+  //  std::cout<< An;
+  //  std::cout<< "\n";
+  //}
 }
 
 void pueoSim::pueoTrigger::generate_beams_L1(std::vector<std::vector<int>> &L1_beams) {
@@ -74,7 +96,7 @@ void pueoSim::pueoTrigger::generate_beams_L1(std::vector<std::vector<int>> &L1_b
   int h_max = floor((w1 * sin(50.0 / 180.0 * M_PI))/ (delta_t * c));
   int h_min = ceil((w1 * sin(-50.0 / 180.0 * M_PI))/ (delta_t * c));
   std::vector<std::vector<int>> horizontal;
-  for (int i = h_min; i < h_max+1; i+=1) {
+  for (int i = h_min; i < h_max+1; i+=2) {
     std::vector<int> beam;
     beam.push_back(0);
     beam.push_back(i);

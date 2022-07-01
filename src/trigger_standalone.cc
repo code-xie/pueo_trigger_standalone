@@ -578,9 +578,9 @@ void visualiseTrigger(int argc, char **argv, int L1_threshold, int L2_threshold,
   //     std::cout << asin(j * (delta_t * c) / w1) / M_PI * 180 << "\t";
   //}
   //std::cout << "\n";
-   for (int i = v_min; i < v_max+1; i++) {
+   for (int i = v_min; i < v_max+1; i+=2) {
      //std::cout << asin(i * (delta_t * c) / h) / M_PI * 180 << "\t\t";
-      for (int j = h_min; j < h_max+1; j++) {
+      for (int j = h_min; j < h_max+1; j+=2) {
             //std::cout << ptrigger.L1_max_value[beam_L1_count] << "\t";
             dt_L1->SetPoint(beam_L1_count,asin(i * (delta_t * c) / h) / M_PI * 180, asin(j * (delta_t * c) / w1) / M_PI * 180,  ptrigger->L1_max_value[beam_L1_count]);
             beam_L1_count++;
@@ -623,9 +623,9 @@ void visualiseTrigger(int argc, char **argv, int L1_threshold, int L2_threshold,
   //     std::cout << asin(j * (delta_t * c) / w) / M_PI * 180 << "\t";
   //}
   //std::cout << "\n";
-   for (int i = v_min; i < v_max+1; i++) {
+   for (int i = v_min; i < v_max+1; i+=2) {
      //std::cout << asin(i * (delta_t * c) / h) / M_PI * 180 << "\t\t";
-      for (int j = h_min; j < h_max+1; j++) {
+      for (int j = h_min; j < h_max+1; j+=2) {
             //std::cout << ptrigger.L2_max_value[beam_L2_count] << "\t";
             dt_L2->SetPoint(beam_L2_count,asin(i * (delta_t * c) / h) / M_PI * 180, asin(j * (delta_t * c) / w) / M_PI * 180,  ptrigger->L2_max_value[beam_L2_count]);
             beam_L2_count++;
@@ -714,7 +714,7 @@ int main(int argc, char **argv) {
   std::cout<< "\n" << "L2 threshold set to " << l2threshold << "\n";
   delete tThresholdL2;
 
-  app.Run(); //interactive plots for reviewing threshold eval
+  //app.Run(); //interactive plots for reviewing threshold eval
 
   //Do runs of trigger with the evaluated thresholds 
   std::cout<< "\n" << "--Trigger on signals with evaluated threshold--" << "\n";
@@ -740,7 +740,7 @@ int main(int argc, char **argv) {
   std::cout << "\n" <<"Loop runs: " <<  total_pueo_runs << "\n";
   std::cout << "\n" <<"Loop triggers: " <<  L2_triggered_count << "\n";
 
-  //visualiseTrigger(argc, argv, L1_threshold, L2_threshold, snr);
+  visualiseTrigger(argc, argv, l1threshold, l2threshold, snr);
   
   //app.Run(); //interactive plots for reviewing threshold eval
 

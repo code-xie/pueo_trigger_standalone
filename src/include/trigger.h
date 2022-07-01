@@ -23,6 +23,7 @@
 #include "FTPair.h"
 #include "TFitResult.h"
 #include "TF1.h"
+#include "TTree.h"
 
 namespace pueoSim {
 
@@ -63,6 +64,7 @@ namespace pueoSim {
 
     void setScaling(float multiplier);
     void generate_beams_L1(std::vector<std::vector<int>> &L1_beams);
+    void get_beamsL1_simpleSeparation(std::vector<std::vector<int>> &L1_beams);
     void generate_beams_L2(std::vector<std::vector<int>> &L2_beams, std::vector<std::vector<int>> &L1_L2_map);
     void newSignal(std::vector<nicemc::FTPair> input_signals);
     void digitize(int bits);
