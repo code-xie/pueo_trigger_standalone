@@ -23,6 +23,7 @@
 #include "TFitResult.h"
 #include "TF1.h"
 #include "trigger.h"
+#include <chrono>
 
 
 double e_field(double theta_offcone, double freq, double normalisation ) {
@@ -398,7 +399,7 @@ std::vector<nicemc::FTPair> signal_gen(std::mt19937& gen, double snr, int n_samp
   double h2 = 3.0; //vertical separation between adjacent antennas between top two antennas in //a given phi sector
   double h = 2 * h1 + h2;
   double c = 3e8;
-  double delta_t = 1/(2.6e9); //time between samples, for 2.6Ghz sample frequency
+  double delta_t = 1/(2.56e9); //time between samples, for 2.6Ghz sample frequency
 
  /****
    * label antennas in L2 sector as below
@@ -558,7 +559,7 @@ void visualiseTrigger(int argc, char **argv, int L1_threshold, int L2_threshold,
   double h2 = 3.0; //vertical separation between adjacent antennas between top two antennas in //a given phi sector
   double h = 2 * h1 + h2;
   double c = 3e8;
-  double delta_t = 1/(2.6e9); //time between samples, for 2.6Ghz sample frequency
+  double delta_t = 1/(2.56e9); //time between samples, for 2.6Ghz sample frequency
 
   TCanvas *c_L1 = new TCanvas("L1","L1",0,0,600,400);
   TGraph2D *dt_L1 = new TGraph2D();
@@ -662,45 +663,48 @@ void visualiseTrigger(int argc, char **argv, int L1_threshold, int L2_threshold,
 
 }  
 int main(int argc, char **argv) {
-  
+  auto start = std::chrono::high_resolution_clock::now();
   //setting up random numbers for closed loop noise generation
   std::random_device rd;  // Will be used to obtain a seed for the random number engine
   std::mt19937 gen(rd()); // Standard mersenne_twister_engine seeded with rd()
 
   
   
-  int l1threshold = 368;
-  int l2threshold = 1306;
+  int l1threshold = 306;
+  int l2threshold = 1210;
   int repeats;
   float samplingFreqHz = 2.56E9;
 
-  TApplication app("app", &argc, argv); //interactive plots for reviewing threshold eval. Also needs app.Run() later
-  //L1 threshold evaluation - at least 1E4 iterations; fast
+TApplication app("app", &argc, argv); //interactive plots for reviewing threshold eval. Also needs app.Run() later
+//L1 threshold evaluation - at least 1E4 iterations; fast
 
-  std::vector<nicemc::FTPair> noise_export = signal_gen(gen, .0, 512, true);
-  TGraph gr = noise_export.at(1).getTimeDomain();
-  gr.SaveAs("exportNoise.csv",".csv");
+//std::vector<nicemc::FTPair> noise_export = signal_gen(gen, .0, 512, true);
+//TGraph gr = noise_export.at(1).getTimeDomain();
+//gr.SaveAs("exportNoise.csv",".csv");
+//
+//
+//std::cout<< "\n" << "--L1 threshold evaluation--" << "\n";
+//repeats = 1E3;
+//pueoSim::triggerThreshold * tThresholdL1 = new pueoSim::triggerThreshold(samplingFreqHz);
+//tThresholdL1->setTriggerScaling(1.0);
+//for (int r=0; r< repeats ; r++) {
+//  //replace signal_gen with pueoSim noise, no signal, vector of 16 FTPairs, each 512 samples
+//  tThresholdL1->L1Threshold_addData(signal_gen(gen, .0, 512, true));
+//  if (r % (repeats/10) == 0) {
+//    std::cout << "L1 iteration " << r << " done" << "\n";
+//  }
+//}
+//l1threshold = tThresholdL1->L1Threshold_eval();
+//std::cout<< "\n\n" << "L1 threshold set to " << l1threshold << "\n";
+//delete tThresholdL1;
+//
+//app.Run(); //interactive plots for reviewing threshold eval
+  
 
-
-  std::cout<< "\n" << "--L1 threshold evaluation--" << "\n";
-  repeats = 1E3;
-  pueoSim::triggerThreshold * tThresholdL1 = new pueoSim::triggerThreshold(samplingFreqHz);
-  tThresholdL1->setTriggerScaling(1.0);
-  for (int r=0; r< repeats ; r++) {
-    //replace signal_gen with pueoSim noise, no signal, vector of 16 FTPairs, each 512 samples
-    tThresholdL1->L1Threshold_addData(signal_gen(gen, .0, 512, true));
-    if (r % (repeats/10) == 0) {
-      std::cout << "L1 iteration " << r << " done" << "\n";
-    }
-  }
-  l1threshold = tThresholdL1->L1Threshold_eval();
-  std::cout<< "\n\n" << "L1 threshold set to " << l1threshold << "\n";
-  delete tThresholdL1;
-
-  app.Run(); //interactive plots for reviewing threshold eval
   //L2 threshold evaluation - should be at least 1E4; slow 
+/*
   std::cout<< "\n" << "--L2 threshold evaluation--" << "\n";
-  repeats = 1E2;
+  repeats = 1E4;
   pueoSim::triggerThreshold * tThresholdL2 = new pueoSim::triggerThreshold(samplingFreqHz);
   tThresholdL2->setTriggerScaling(1.0);
   for (int r=0; r< repeats ; r++) {
@@ -713,22 +717,26 @@ int main(int argc, char **argv) {
   l2threshold = tThresholdL2->L2Threshold_eval();
   std::cout<< "\n" << "L2 threshold set to " << l2threshold << "\n";
   delete tThresholdL2;
+  auto stop = std::chrono::high_resolution_clock::now();
+  auto duration = std::chrono::duration_cast<std::chrono::seconds>(stop - start);
+  std::cout << "Runtime: " << duration.count() << " seconds." << std::endl;
 
-  //app.Run(); //interactive plots for reviewing threshold eval
+  app.Run(); //interactive plots for reviewing threshold eval
+*/
 
   //Do runs of trigger with the evaluated thresholds 
   std::cout<< "\n" << "--Trigger on signals with evaluated threshold--" << "\n";
   int total_pueo_runs = 100;
-  double snr = 1.0;
+  double snr = 1.2;
   int L2_triggered_count = 0;
   pueoSim::pueoTrigger * ptrigger = new pueoSim::pueoTrigger(samplingFreqHz);
-  ptrigger->setScaling(1.1);
+  ptrigger->setScaling(1);
   for(int run = 0; run < total_pueo_runs; run++ ) {
     //replace signal_gen with pueoSim signal+noise,vector of 16 FTPairs, each 512 samples     
     ptrigger->newSignal(signal_gen(gen, snr, 512, false));
     ptrigger->digitize(4);
-    ptrigger->l1Trigger(8, 16, l1threshold, 64); //args: ptrigger, step, window, threshold, edge size
-    ptrigger->l2Trigger(8, 16, l2threshold, 64); //args: ptrigger, step, window, threshold, edge size
+    ptrigger->l1Trigger(8, 16, l1threshold, 64); //args: step, window, threshold, edge size
+    ptrigger->l2Trigger(8, 16, l2threshold, 64); //args: step, window, threshold, edge size
     if (ptrigger->L2_triggered == true) {
       L2_triggered_count++;
     }
@@ -739,6 +747,10 @@ int main(int argc, char **argv) {
 
   std::cout << "\n" <<"Loop runs: " <<  total_pueo_runs << "\n";
   std::cout << "\n" <<"Loop triggers: " <<  L2_triggered_count << "\n";
+
+  auto stop = std::chrono::high_resolution_clock::now();
+  auto duration = std::chrono::duration_cast<std::chrono::seconds>(stop - start);
+  std::cout << "Runtime: " << duration.count() << " seconds." << std::endl;
 
   visualiseTrigger(argc, argv, l1threshold, l2threshold, snr);
   

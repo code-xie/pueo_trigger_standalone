@@ -65,7 +65,7 @@ void pueoSim::pueoTrigger::generate_beams_L1(std::vector<std::vector<int>> &L1_b
   double h2 = 3.0; //vertical separation between adjacent antennas between top two antennas in a given phi sector
   double h = 2 * h1 + h2;
   double c = 3e8;
-  double delta_t = 1/(2.6e9); //time between samples, for 2.6Ghz sample frequency
+  double delta_t = 1/(2.56e9); //time between samples, for 2.6Ghz sample frequency
 
   /****
   * label antennas in L1 sector as below
@@ -137,7 +137,7 @@ void pueoSim::pueoTrigger::generate_beams_L2(std::vector<std::vector<int>> &L2_b
   double h2 = 3.0; //vertical separation between adjacent antennas between top two antennas in //a given phi sector
   double h = 2 * h1 + h2;
   double c = 3e8;
-  double delta_t = 1/(2.6e9); //time between samples, for 2.6Ghz sample frequency
+  double delta_t = 1/(2.56e9); //time between samples, for 2.6Ghz sample frequency
 
 
     /****
@@ -306,111 +306,244 @@ void pueoSim::pueoTrigger::digitize(int bits) {
   }
 }
 
-void pueoSim::pueoTrigger::l1Trigger(int step, int window, int threshold, int max_shift) {
 
-  //initialise max values to all zeros
+void pueoSim::pueoTrigger::l1Trigger(int step, int window, int threshold, int max_shift) {
+//window is number of samples in a given coherent sum. Step is how many samples between subsequent windows.
+//threshold is value compared with coherent sum for trigger
+//max_shift accounts for edge effects where samples should not be formed around the start and end of the signal as samples have been shifted.
+
+  //initialise max values to all zeros. This is used for visualisation purposes, not required for the simulation itself
   for(int i_beam=0; i_beam <  n_beams_L1; i_beam += 1) {
     L1_max_value.at(i_beam) = 0;
   }
 
+  //initalize all windows to have NOT triggered (set to false):
   for(int wind_pos=max_shift; wind_pos < n_samples - max_shift-window -16; wind_pos+=step) {
-    bool window_triggered = false;
+    L1_triggered_windows.push_back(false);
+  }
+
+
 
     //Do first L1 sector
     for(int i_beam=0; i_beam <  n_beams_L1; i_beam += 1) {
+    int waveform_length = signals_discrete.at(0).GetN();
+    int total_shifted[waveform_length]={0};
+
+    //sum signals across antennas after shifting each based on beam definition
+    for (int i_ant=0;i_ant<n_ant_L1;i_ant++){
+      for (int samp_pos=0;samp_pos<waveform_length;samp_pos++){
+        total_shifted[samp_pos]+= signals_discrete.at(i_ant).GetPointY(samp_pos-L1_beams.at(i_beam).at(i_ant));
+        //std::cout<<"here! "<<samp_pos<<", "<<total_shifted[samp_pos]<<std::endl;
+
+      }
+    }
+
+    //square so that total_shifted has power:
+    for (int samp_pos=0;samp_pos<waveform_length;samp_pos++){
+      total_shifted[samp_pos]=total_shifted[samp_pos]*total_shifted[samp_pos];
+      //std::cout<<"shifted val is "<<total_shifted[samp_pos]<<std::endl;
+    }
+    //Now cycle through windows and record if a winow triggers. Note that as long as any beam triggers, the trigger for that window is set to //true:
+    int window_count = 0;
+
+    for(int wind_pos=max_shift; wind_pos < n_samples - max_shift-window -16; wind_pos+=step) {
       int coherent_sum = 0;
 
-      for (int samp_pos=0; samp_pos < window ; samp_pos +=1){
-        int coherent_sum_sample = 0;
-        for (int i_ant=0; i_ant<n_ant_L1; i_ant+=1) {
-          coherent_sum_sample += signals_discrete.at(L1_ants.at(i_beam).at(i_ant)).GetPointY(wind_pos+samp_pos-L1_beams.at(i_beam).at(i_ant));
-        }
-        int coherent_sum_sqr_sample = coherent_sum_sample * coherent_sum_sample;
-        coherent_sum += coherent_sum_sqr_sample;
+      for (int samp_pos=0;samp_pos<window; samp_pos++){
+      coherent_sum+=total_shifted[wind_pos+samp_pos];
       }
-    
-      if (coherent_sum > threshold) {
-        window_triggered = true;
+      //std::cout<<"coherent sum: "<<coherent_sum <<", threshold: "<<threshold << std::endl;
+      if(coherent_sum>threshold){
+      //std::cout<<"triggered l1!"<<std::endl;
+      L1_triggered_windows.at(window_count)=true;
+      }
 
-      }
+      //This is used for visualisation purposes, not required for the simulation itself
       if (coherent_sum > L1_max_value.at(i_beam)){
         L1_max_value.at(i_beam) = coherent_sum;
       }
-    
+
+      window_count++;
     }
+
+  }
 
     //Do second L1 sector
     for(int i_beam=0; i_beam <  n_beams_L1; i_beam += 1) {
-      int coherent_sum = 0;
+      int waveform_length = signals_discrete.at(0).GetN();
+      int total_shifted[waveform_length]={0};
 
-      for (int samp_pos=0; samp_pos < window ; samp_pos +=1){
-        int coherent_sum_sample = 0;
-        for (int i_ant=0; i_ant<n_ant_L1; i_ant+=1) {
-          coherent_sum_sample += signals_discrete.at(L1_ants.at(i_beam).at(i_ant)+8).GetPointY(wind_pos+samp_pos-L1_beams.at(i_beam).at(i_ant));
+      for (int i_ant=0;i_ant<n_ant_L1;i_ant++){
+        for (int samp_pos=0;samp_pos<waveform_length;samp_pos++){
+          total_shifted[samp_pos]+= signals_discrete.at(i_ant+8).GetPointY(samp_pos-L1_beams.at(i_beam).at(i_ant));
+          //std::cout<<"here! "<<samp_pos<<", "<<total_shifted[samp_pos]<<std::endl;
+
         }
-        int coherent_sum_sqr_sample = coherent_sum_sample * coherent_sum_sample;
-        coherent_sum += coherent_sum_sqr_sample;
       }
-    
-      if (coherent_sum > threshold) {
-        //std::cout << "sum=" << coherent_sum;
-        window_triggered = true;
+
+      //square so that total_shifted has power:
+      for (int samp_pos=0;samp_pos<waveform_length;samp_pos++){
+        total_shifted[samp_pos]=total_shifted[samp_pos]*total_shifted[samp_pos];
+        //std::cout<<"shifted val is "<<total_shifted[samp_pos]<<std::endl;
       }
-      if (coherent_sum > L1_max_value.at(i_beam)){
-        L1_max_value.at(i_beam) = coherent_sum;
+      //Now cycle through windows and record if a winow triggers. Note that as long as any beam triggers, the trigger for that window is set to //true:
+      int window_count = 0;
+
+      for(int wind_pos=max_shift; wind_pos < n_samples - max_shift-window -16; wind_pos+=step) {
+        int coherent_sum = 0;
+
+        for (int samp_pos=0;samp_pos<window; samp_pos++){
+          coherent_sum+=total_shifted[wind_pos+samp_pos];
+        }
+        //std::cout<<"coherent sum: "<<coherent_sum <<", threshold: "<<threshold << std::endl;
+        if(coherent_sum>threshold){
+          //std::cout<<"triggered l1!"<<std::endl;
+          L1_triggered_windows.at(window_count)=true;
+        }
+        window_count++;
       }
-    
+
     }
 
-    //std::cout << "tr=" << window_triggered << "/n";
-    L1_triggered_windows.push_back(window_triggered);
+//old way - less efficient
+// for(int wind_pos=max_shift; wind_pos < n_samples - max_shift-window -16; wind_pos+=step) {
+//      bool window_triggered = false;
 
+//      //Do first L1 sector
+//      for(int i_beam=0; i_beam <  n_beams_L1; i_beam += 1) {
+//        int coherent_sum = 0;
 
-  }
+//        for (int samp_pos=0; samp_pos < window ; samp_pos +=1){
+//          int coherent_sum_sample = 0;
+//          for (int i_ant=0; i_ant<n_ant_L1; i_ant+=1) {
+//            coherent_sum_sample += signals_discrete.at(L1_ants.at(i_beam).at(i_ant)).GetPointY(wind_pos+samp_pos-L1_beams.at(i_beam).at(i_ant));
+//          }
+//          int coherent_sum_sqr_sample = coherent_sum_sample * coherent_sum_sample;
+//          coherent_sum += coherent_sum_sqr_sample;
+//        }
+//      
+//        if (coherent_sum > threshold) {
+//          window_triggered = true;
+
+//        }
+//        if (coherent_sum > L1_max_value.at(i_beam)){
+//          L1_max_value.at(i_beam) = coherent_sum;
+//        }
+//      
+//      }
+
+//      //Do second L1 sector
+//      for(int i_beam=0; i_beam <  n_beams_L1; i_beam += 1) {
+//        int coherent_sum = 0;
+
+//        for (int samp_pos=0; samp_pos < window ; samp_pos +=1){
+//          int coherent_sum_sample = 0;
+//          for (int i_ant=0; i_ant<n_ant_L1; i_ant+=1) {
+//            coherent_sum_sample += signals_discrete.at(L1_ants.at(i_beam).at(i_ant)+8).GetPointY(wind_pos+samp_pos-L1_beams.at(i_beam).at(i_ant));
+//          }
+//          int coherent_sum_sqr_sample = coherent_sum_sample * coherent_sum_sample;
+//          coherent_sum += coherent_sum_sqr_sample;
+//        }
+//      
+//        if (coherent_sum > threshold) {
+//          //std::cout << "sum=" << coherent_sum;
+//          window_triggered = true;
+//        }
+//        if (coherent_sum > L1_max_value.at(i_beam)){
+//          L1_max_value.at(i_beam) = coherent_sum;
+//        }
+//      
+//      }
+
+//      //std::cout << "tr=" << window_triggered << "/n";
+//      L1_triggered_windows.push_back(window_triggered);
+//  }
+
+  
 }
 
 void pueoSim::pueoTrigger::l2Trigger(int step, int window, int threshold, int max_shift) {
 
-  ////get list of L2 beams that need to be triggered
-  //std::vector<bool> L2_from_L1 (L2_beams.size(), 0);
-  //for (int i = 0; i < L1_triggers.size(); i++) {
-  //  if (L1_triggers.at(i) == true) {
-  //    for (std::vector<int>::iterator j = L1_L2_map.at(i).begin(); j != L1_L2_map.at(i).end(); ++j) {
-  //      L2_from_L1.at(*j) = true;
-  //    }
-  //  }
-  //}
-
-
-  //initialise max values to all zeros
+  //initialise max values to all zeros. This is used for visualisation purposes, not required for the simulation itself
   for(int i_beam=0; i_beam <  n_beams_L2; i_beam += 1) {
     L2_max_value.at(i_beam) = 0;
   }
 
-  int window_count = 0;
   L2_triggered = false;
-  for(int wind_pos=max_shift; wind_pos < n_samples - max_shift-window -16; wind_pos+=step) {
-    if (L1_triggered_windows.at(window_count) == true) {
-      for(int i_beam=0; i_beam <  n_beams_L2; i_beam += 1) {
+
+  for(int i_beam=0; i_beam <  n_beams_L2; i_beam += 1) {
+    int waveform_length = signals_discrete.at(0).GetN();
+    int total_shifted[waveform_length]={0};
+
+    //sum signals across antennas after shifting each based on beam definition
+    for (int i_ant=0;i_ant<n_ant_L2;i_ant++){
+      for (int samp_pos=0;samp_pos<waveform_length;samp_pos++){
+        total_shifted[samp_pos]+= signals_discrete.at(i_ant).GetPointY(samp_pos-L2_beams.at(i_beam).at(i_ant));
+        //std::cout<<"here! "<<samp_pos<<", "<<total_shifted[samp_pos]<<std::endl;
+        //std::cout << total_shifted[samp_pos] << " ";
+      }
+    }
+    //std::cout<< "\n";
+
+    //square so that total_shifted has power:
+    for (int samp_pos=0;samp_pos<waveform_length;samp_pos++){
+
+      total_shifted[samp_pos]=total_shifted[samp_pos]*total_shifted[samp_pos];
+
+    }
+
+    //Now cycle through windows and record if a winow triggers. Note that as long as any beam triggers, the trigger for that window is set to //true:
+    int window_count = 0;
+    for(int wind_pos=max_shift; wind_pos < n_samples - max_shift-window -16; wind_pos+=step) {
+      if (L1_triggered_windows.at(window_count) == true) {
         int coherent_sum = 0;
-        for (int samp_pos=0; samp_pos < window ; samp_pos +=1){
-          int coherent_sum_sample = 0;
-          for (int i_ant=0; i_ant<n_ant_L2; i_ant+=1) {
-            coherent_sum_sample += signals_discrete.at(L2_ants.at(i_beam).at(i_ant)).GetPointY(wind_pos+samp_pos-L2_beams.at(i_beam).at(i_ant));
-          }
-          int coherent_sum_sqr_sample = coherent_sum_sample * coherent_sum_sample;
-          coherent_sum += coherent_sum_sqr_sample;
+
+        for (int samp_pos=0;samp_pos<window; samp_pos+=1 ){
+        coherent_sum+=total_shifted[wind_pos+samp_pos];
         }
-        if (coherent_sum > threshold) {
+
+        if(coherent_sum>threshold){
           L2_triggered = true;
         }
+
         if (coherent_sum > L2_max_value.at(i_beam)){
           L2_max_value.at(i_beam) = coherent_sum;
         }
+
+        
       }
+      window_count++;
     }
-    window_count++;
   }
+
+  //old way - less efficient
+//  int window_count = 0;
+//  L2_triggered = false;
+//  
+//  for(int wind_pos=max_shift; wind_pos < n_samples - max_shift-window -16; wind_pos+=step) {
+//    if (L1_triggered_windows.at(window_count) == true) {
+//      for(int i_beam=0; i_beam <  n_beams_L2; i_beam += 1) {
+//        int coherent_sum = 0;
+//        for (int samp_pos=0; samp_pos < window ; samp_pos +=1){
+//          int coherent_sum_sample = 0;
+//          for (int i_ant=0; i_ant<n_ant_L2; i_ant+=1) {
+//            coherent_sum_sample += signals_discrete.at(i_ant).GetPointY(wind_pos+samp_pos-L2_beams.at(i_beam).at(i_ant));
+//          }
+//          int coherent_sum_sqr_sample = coherent_sum_sample * coherent_sum_sample;
+//          coherent_sum += coherent_sum_sqr_sample;
+//        }
+//        if (coherent_sum > threshold) {
+//          L2_triggered = true;
+//
+//        }
+//        if (coherent_sum > L2_max_value.at(i_beam)){
+//          L2_max_value.at(i_beam) = coherent_sum;
+//        }
+//      }
+//    }
+//    window_count++;
+//  }
+
 }
 
 pueoSim::triggerThreshold::triggerThreshold(float samplingFreqHz_input) {
@@ -436,21 +569,48 @@ void pueoSim::triggerThreshold::L1Threshold_addData(std::vector<nicemc::FTPair> 
   int window = 16;
   int max_shift = 64;
 
+  int waveform_length = ptrigger->signals_discrete.at(0).GetN();
+  int total_shifted[waveform_length]={0};
+
+  for (int i_ant=0;i_ant<number_ants;i_ant++){
+    for (int samp_pos=0;samp_pos<waveform_length;samp_pos++){
+      total_shifted[samp_pos]+= ptrigger->signals_discrete.at(i_ant).GetPointY(samp_pos);
+      //std::cout<<"here! "<<samp_pos<<", "<<total_shifted[samp_pos]<<std::endl;
+    }
+  }
+
+  //square so that total_shifted has power:
+  for (int samp_pos=0;samp_pos<waveform_length;samp_pos++){
+    total_shifted[samp_pos]=total_shifted[samp_pos]*total_shifted[samp_pos];
+  }
+
   for(int wind_pos=max_shift; wind_pos < n_samples - max_shift-window -16; wind_pos+=step) {
     int coherent_sum = 0;
-    for (int samp_pos=0; samp_pos < window ; samp_pos +=1){
-      int coherent_sum_sample = 0;
-      for (int i_ant=0; i_ant<number_ants; i_ant+=1) {
-        coherent_sum_sample += ptrigger->signals_discrete.at(i_ant).GetPointY(wind_pos+samp_pos);
-      }
-      int coherent_sum_sqr_sample = coherent_sum_sample * coherent_sum_sample;
-      coherent_sum += coherent_sum_sqr_sample;
+    for (int samp_pos=0;samp_pos<window; samp_pos++){
+    coherent_sum+=total_shifted[wind_pos+samp_pos];
     }
-    //samples.push_back(coherent_sum);
-    //h1->Fill(coherent_sum);
     coherent_values.push_back(coherent_sum);
     window_count++;
-  }  
+  }
+
+
+  //old way
+  //for(int wind_pos=max_shift; wind_pos < n_samples - max_shift-window -16; wind_pos+=step) {
+  //  int coherent_sum = 0;
+  //  for (int samp_pos=0; samp_pos < window ; samp_pos +=1){
+  //    int coherent_sum_sample = 0;
+  //    for (int i_ant=0; i_ant<number_ants; i_ant+=1) {
+  //      coherent_sum_sample += ptrigger->signals_discrete.at(i_ant).GetPointY(wind_pos+samp_pos);
+  //    }
+  //    int coherent_sum_sqr_sample = coherent_sum_sample * coherent_sum_sample;
+  //    coherent_sum += coherent_sum_sqr_sample;
+  //  }
+  //  
+  //  
+  //  coherent_values.push_back(coherent_sum);
+  //  window_count++;
+  //}
+
 }
 
 int pueoSim::triggerThreshold::L1Threshold_eval() {  
@@ -475,7 +635,7 @@ int pueoSim::triggerThreshold::L1Threshold_eval() {
   gPad->SetLogy();
 
   double sector_rate = 1E6;
-  double sample_rate = 2.949E9;
+  double sample_rate = 2.56E9;
   double step = 8;
 
   
@@ -489,7 +649,7 @@ void  pueoSim::triggerThreshold::L2Threshold_addData(std::vector<nicemc::FTPair>
   ptrigger->digitize(4);
   ptrigger->l1Trigger(8, 16, L1Threshold, 64);
   
-  int window_count_this_signal = 0;
+  
 
   int n_samples = ptrigger->signals_discrete.at(0).GetN();
   int number_ants = 16;  
@@ -497,9 +657,66 @@ void  pueoSim::triggerThreshold::L2Threshold_addData(std::vector<nicemc::FTPair>
   int window = 16;
   int max_shift = 64;
 
+// pre-shift approach has issue since we want to keep track of largest coherent value at the window, across beams. Needs array of coherent sum maxes
+  int num_windows = 0;
   for(int wind_pos=max_shift; wind_pos < n_samples - max_shift-window -16; wind_pos+=step) {
+    num_windows++;
+  }
+  int window_count_this_signal = 0;
 
+/*
+  //new way - about half the speed of old way due to nature of calculation
+  int coherent_sum_max[num_windows] = {0};
+  for(int i_beam=0; i_beam <  ptrigger->n_beams_L2; i_beam += 1) {
+    int waveform_length = ptrigger->signals_discrete.at(0).GetN();
+    int total_shifted[waveform_length]={0};
+    
+
+    for (int i_ant=0;i_ant<number_ants;i_ant++){
+      for (int samp_pos=0;samp_pos<waveform_length;samp_pos++){
+        total_shifted[samp_pos]+= ptrigger->signals_discrete.at(i_ant).GetPointY(samp_pos-ptrigger->L2_beams.at(i_beam).at(i_ant));
+        //std::cout<<"here! "<<samp_pos<<", "<<total_shifted[samp_pos]<<std::endl;
+      }
+    }
+
+    //square so that total_shifted has power:
+    for (int samp_pos=0;samp_pos<waveform_length;samp_pos++){
+      total_shifted[samp_pos]=total_shifted[samp_pos]*total_shifted[samp_pos];
+    }
+
+    //
+    window_count_this_signal = 0;
+    for(int wind_pos=max_shift; wind_pos < n_samples - max_shift-window -16; wind_pos+=step) {
+      if (ptrigger->L1_triggered_windows.at(window_count_this_signal) == true) {
+        int coherent_sum = 0;
+        for (int samp_pos=0;samp_pos<window; samp_pos++){
+          coherent_sum+=total_shifted[wind_pos+samp_pos];
+        }
+        if (coherent_sum > coherent_sum_max[window_count_this_signal]) {
+          coherent_sum_max[window_count_this_signal] = coherent_sum;
+        }
+      }
+      window_count_this_signal++;
+    }
+  }
+
+  window_count_this_signal = 0;
+  for(int wind_pos=max_shift; wind_pos < n_samples - max_shift-window -16; wind_pos+=step) {
     if (ptrigger->L1_triggered_windows.at(window_count_this_signal) == true) {
+      coherent_values.push_back(coherent_sum_max[window_count_this_signal]);
+      //std::cout << "coherent sum pushed = " << coherent_sum_max[window_count_this_signal] << std::endl;
+     
+    }
+    window_count++; //every window counts for threshold evaluation regardless if triggered
+    window_count_this_signal++;
+    
+  }
+
+*/
+  
+///*
+  for(int wind_pos=max_shift; wind_pos < n_samples - max_shift-window -16; wind_pos+=step) {
+    if (ptrigger->L1_triggered_windows.at(window_count_this_signal) == true) { //the threshold value is only relevant if L1 triggered 
       int coherent_sum_max = 0;
       for(int i_beam=0; i_beam <  ptrigger->n_beams_L2; i_beam += 1) {
         int coherent_sum = 0;
@@ -518,9 +735,10 @@ void  pueoSim::triggerThreshold::L2Threshold_addData(std::vector<nicemc::FTPair>
       //h1->Fill(coherent_sum_max);
       coherent_values.push_back(coherent_sum_max);
     }
-    window_count_this_signal++;
-    window_count++;
+    window_count_this_signal++; //used to keep track of window vs. L1 triggers 
+    window_count++; //every window counts for threshold evaluation regardless if triggered
   }
+//*/
 }
 
 int  pueoSim::triggerThreshold::L2Threshold_eval() {  
@@ -542,7 +760,7 @@ int  pueoSim::triggerThreshold::L2Threshold_eval() {
   //std::cout << "p0=" << fitFunc->GetParameter(0) << " p1=" << fitFunc->GetParameter(1) ;
 
   double sector_rate = 12;
-  double sample_rate = 2.949E9;
+  double sample_rate = 2.56E9;
   double step = 8;
   int l2threshold = round((std::log(sector_rate * step / sample_rate *  window_count ) - fitFunc->GetParameter(0) ) / fitFunc->GetParameter(1));
   //std::cout<< "\n" << "L2 threshold " << l2threshold << "\n";
