@@ -7,7 +7,10 @@
 #include "TF1.h"
 #include "trigger.h"
 
-pueoSim::pueoTrigger::pueoTrigger(float samplingFreqHz_input){
+pueoSim::pueoTrigger::pueoTrigger(float samplingFreqHz_input, int antenna_start){
+
+  samplingFreqHz = samplingFreqHz_input;
+  first_antenna = (antenna_start+96)%96;
 
   //generate_beams_L1(L1_beams);
   get_beamsL1_simpleSeparation(L1_beams);
@@ -25,7 +28,7 @@ pueoSim::pueoTrigger::pueoTrigger(float samplingFreqHz_input){
 	L2_ants.push_back(antennas_L2);
   }
 
-  samplingFreqHz = samplingFreqHz_input;
+  
 
   //reenable cout
   std::cout.clear();
@@ -69,7 +72,6 @@ void pueoSim::pueoTrigger::get_beamsL1_simpleSeparation(std::vector<std::vector<
   //define centre of sector as elevation perpendicular to the payload, and azimuth the average of the two bottom antennas (for L1) and average of the left/right most two bottom antennas (for L2)
 
   //1. Find centre of sector by taking bottom antennas and average their azimuth (evaluated from cartesian coordinates)
-  int first_antenna = 0;
   tree->GetEntry(first_antenna+3);
   float azimuth_1 = Az;
   tree->GetEntry((first_antenna +7)%96);
@@ -92,8 +94,8 @@ void pueoSim::pueoTrigger::get_beamsL1_simpleSeparation(std::vector<std::vector<
       double x_0 = cos(elevation/180.*M_PI) * (inch_to_m*Z * tan(elevation/180.*M_PI) - inch_to_m*r * cos((azimuth - Az)/180.*M_PI)) ;
       
       std::vector<int> beam;
-      for (int antenna = first_antenna; antenna < (first_antenna + 8) % 96; antenna++) {
-        tree->GetEntry(antenna);
+      for (int antenna = first_antenna; antenna < (first_antenna + 8) ; antenna++) {
+        tree->GetEntry((antenna+96) % 96);
         double delta_x = x_0 - cos(elevation/180.*M_PI) * (inch_to_m*Z * tan(elevation/180.*M_PI) - inch_to_m*r * cos((azimuth - Az)/180.*M_PI)) ;
         double delta_samples = delta_x * (2.56e9 / c);
         //std::cout << delta_samples << "     \t";
@@ -139,7 +141,6 @@ void pueoSim::pueoTrigger::get_beamsL2_simpleSeparation(std::vector<std::vector<
   //define centre of sector as elevation perpendicular to the payload, and azimuth the average of the two bottom antennas (for L1) and average of the left/right most two bottom antennas (for L2)
 
   //1. Find centre of sector by taking bottom antennas and average their azimuth (evaluated from cartesian coordinates)
-  int first_antenna = 0;
   tree->GetEntry(first_antenna+3);
   float azimuth_1 = Az;
   tree->GetEntry((first_antenna +15)%96);
@@ -162,8 +163,8 @@ void pueoSim::pueoTrigger::get_beamsL2_simpleSeparation(std::vector<std::vector<
       double x_0 = cos(elevation/180.*M_PI) * (inch_to_m*Z * tan(elevation/180.*M_PI) - inch_to_m*r * cos((azimuth - Az)/180.*M_PI)) ;
       
       std::vector<int> beam;
-      for (int antenna = first_antenna; antenna < (first_antenna + 16) % 96; antenna++) {
-        tree->GetEntry(antenna);
+      for (int antenna = first_antenna; antenna < first_antenna + 16 ; antenna++) {
+        tree->GetEntry((antenna+96) % 96);
         double delta_x = x_0 - cos(elevation/180.*M_PI) * (inch_to_m*Z * tan(elevation/180.*M_PI) - inch_to_m*r * cos((azimuth - Az)/180.*M_PI)) ;
         double delta_samples = delta_x * (2.56e9 / c);
         //std::cout << delta_samples << "     \t";
@@ -664,9 +665,9 @@ void pueoSim::pueoTrigger::l2Trigger(int step, int window, int threshold, int ma
 
 }
 
-pueoSim::triggerThreshold::triggerThreshold(float samplingFreqHz_input) {
+pueoSim::triggerThreshold::triggerThreshold(float samplingFreqHz_input, int first_antenna) {
   window_count = 0;
-  ptrigger = new pueoTrigger(samplingFreqHz_input);
+  ptrigger = new pueoTrigger(samplingFreqHz_input, (first_antenna+96)%96);
   
   //h1 = new TH1D("Histogram for coherent values","Histogram for coherent values",100,0.,5000.);
 }

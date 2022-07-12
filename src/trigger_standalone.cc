@@ -379,11 +379,11 @@ TGraph * combine_noise_zero_signal(double noise[], int size, double multiplier, 
   //return noise_tgraph;
 }
 
-std::vector<nicemc::FTPair> signal_gen(std::mt19937& gen, double snr, int n_samples, bool noise_only, double sample_rate_hz) {
+std::vector<nicemc::FTPair> signal_gen(std::mt19937& gen, double snr, int n_samples, bool noise_only, double sample_rate_hz, int first_antenna) {
 
   //choosing source
   double theta = 0.0 ;
-  double phi   = 30.0;
+  double phi   = 0.0;
 
 
   //initialising antenna data
@@ -493,11 +493,14 @@ std::vector<nicemc::FTPair> signal_gen(std::mt19937& gen, double snr, int n_samp
   tree->SetBranchAddress("AzCenter(deg)",&Az);
   tree->SetBranchAddress("HorizDist(in)",&r);
 
+  first_antenna = (first_antenna + 96) % 96;
+
   for (int i=0; i<n_samples; i++) {
     
     x[i] = i;
     for (int i_ant=0; i_ant < 16; i_ant ++) {
-      tree->GetEntry(i_ant);
+      int i_ant_adj = (first_antenna + i_ant) % 96;
+      tree->GetEntry(i_ant_adj);
       y[i_ant][i] =  received_signal_pre_interp[i_ant]  .Eval((i+ sample_padding)/sample_rate_hz - (cos(theta/180.*M_PI) * (inch_to_m*Z * tan(theta/180.*M_PI) - inch_to_m*r * cos((phi - Az)/180.*M_PI)))/ c  );
     }
   }
@@ -518,14 +521,14 @@ std::vector<nicemc::FTPair> signal_gen(std::mt19937& gen, double snr, int n_samp
   return generated_signals;
 }
 
-void visualiseTrigger(int argc, char **argv, int L1_threshold, int L2_threshold, double snr, double sample_rate_hz) {
+void visualiseTrigger(int argc, char **argv, int L1_threshold, int L2_threshold, double snr, double sample_rate_hz, int antenna_start) {
   TApplication app("app", &argc, argv); //this allows interactive plots for cmake application
 
   std::random_device rd;  // Will be used to obtain a seed for the random number engine
   std::mt19937 gen(rd()); // Standard mersenne_twister_engine seeded with rd()
 
-  std::vector<nicemc::FTPair> internally_generated_signal = signal_gen(gen, snr, 512, false, sample_rate_hz);
-  pueoSim::pueoTrigger * ptrigger = new pueoSim::pueoTrigger(sample_rate_hz);
+  std::vector<nicemc::FTPair> internally_generated_signal = signal_gen(gen, snr, 512, false, sample_rate_hz, antenna_start);
+  pueoSim::pueoTrigger * ptrigger = new pueoSim::pueoTrigger(sample_rate_hz, antenna_start);
   ptrigger->newSignal(internally_generated_signal);
   
   std::cout.precision(5);
@@ -643,10 +646,10 @@ void visualiseTrigger(int argc, char **argv, int L1_threshold, int L2_threshold,
   tree->SetBranchAddress("AzCenter(deg)",&Az);
   tree->SetBranchAddress("HorizDist(in)",&r);
 
-  int first_antenna = 0;
-  tree->GetEntry(first_antenna+3);
+  int first_antenna = (antenna_start+96) % 96;
+  tree->GetEntry((first_antenna+3)%96);
   float azimuth_1 = Az;
-  tree->GetEntry(first_antenna +7);
+  tree->GetEntry((first_antenna +7)%96);
   float azimuth_2 = Az;
   float centre_azimuth = (azimuth_1 + azimuth_2)/2;
   //std::cout << "Centre of sector azimuth = " << centre_azimuth << "\n";
@@ -713,9 +716,9 @@ void visualiseTrigger(int argc, char **argv, int L1_threshold, int L2_threshold,
    */
 
   //new L2 beam plotting using photogrammetry file
-  tree->GetEntry(first_antenna+3);
+  tree->GetEntry((first_antenna+3)%96);
   azimuth_1 = Az;
-  tree->GetEntry(first_antenna +15);
+  tree->GetEntry((first_antenna +15)%96);
   azimuth_2 = Az;
   centre_azimuth = (azimuth_1 + azimuth_2)/2;
   //std::cout << "Centre of sector azimuth = " << centre_azimuth << "\n";
@@ -772,6 +775,7 @@ int main(int argc, char **argv) {
   int l2threshold = 1210;
   int repeats;
   float samplingFreqHz = 2.56E9;
+  int antenna_start = 88;
 
 TApplication app("app", &argc, argv); //interactive plots for reviewing threshold eval. Also needs app.Run() later
 //L1 threshold evaluation - at least 1E4 iterations; fast
@@ -824,14 +828,14 @@ TApplication app("app", &argc, argv); //interactive plots for reviewing threshol
 
   //Do runs of trigger with the evaluated thresholds 
   std::cout<< "\n" << "--Trigger on signals with evaluated threshold--" << "\n";
-  int total_pueo_runs = 100;
-  double snr = 1.2;
+  int total_pueo_runs = 10;
+  double snr = 3.2;
   int L2_triggered_count = 0;
-  pueoSim::pueoTrigger * ptrigger = new pueoSim::pueoTrigger(samplingFreqHz);
+  pueoSim::pueoTrigger * ptrigger = new pueoSim::pueoTrigger(samplingFreqHz, antenna_start);
   ptrigger->setScaling(1);
   for(int run = 0; run < total_pueo_runs; run++ ) {
     //replace signal_gen with pueoSim signal+noise,vector of 16 FTPairs, each 512 samples     
-    ptrigger->newSignal(signal_gen(gen, snr, 512, false, samplingFreqHz));
+    ptrigger->newSignal(signal_gen(gen, snr, 512, false, samplingFreqHz, antenna_start));
     ptrigger->digitize(4);
     ptrigger->l1Trigger(8, 16, l1threshold, 64); //args: step, window, threshold, edge size
     ptrigger->l2Trigger(8, 16, l2threshold, 64); //args: step, window, threshold, edge size
@@ -850,7 +854,7 @@ TApplication app("app", &argc, argv); //interactive plots for reviewing threshol
   auto duration = std::chrono::duration_cast<std::chrono::seconds>(stop - start);
   std::cout << "Runtime: " << duration.count() << " seconds." << std::endl;
 
-  visualiseTrigger(argc, argv, l1threshold, l2threshold, snr, samplingFreqHz);
+  visualiseTrigger(argc, argv, l1threshold, l2threshold, snr, samplingFreqHz, antenna_start);
   
   //app.Run(); //interactive plots for reviewing threshold eval
 

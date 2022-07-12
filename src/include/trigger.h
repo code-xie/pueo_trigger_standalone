@@ -34,11 +34,12 @@ namespace pueoSim {
 
   class pueoTrigger {
   public:
-    pueoTrigger(float samplingFreqHz_input);
+    pueoTrigger(float samplingFreqHz_input, int antenna_start);
 
     static const int n_ant_L1=8;
     static const int n_ant_L2=16;
     
+    int first_antenna;
     int n_samples;
     int n_beams_L1;
     int n_beams_L2;
@@ -84,7 +85,7 @@ namespace pueoSim {
 
   class triggerThreshold {
     public:
-        triggerThreshold(float samplingFreqHz_input);
+        triggerThreshold(float samplingFreqHz_input, int antenna_start);
 
 
         pueoTrigger * ptrigger;
