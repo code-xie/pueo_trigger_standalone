@@ -8,16 +8,17 @@
 #include "trigger.h"
 
 pueoSim::pueoTrigger::pueoTrigger(float samplingFreqHz_input){
-  get_beamsL1_simpleSeparation(L1_beams);
 
-  generate_beams_L1(L1_beams);
+  //generate_beams_L1(L1_beams);
+  get_beamsL1_simpleSeparation(L1_beams);
   n_beams_L1 = L1_beams.size();
   std::vector<int> antennas_L1 = {0,1,2,3,4,5,6,7};
   for (int i=0; i<n_beams_L1; i++) {
 	L1_ants.push_back(antennas_L1);
   }
 
-  generate_beams_L2(L2_beams, L1_L2_map);
+  //generate_beams_L2(L2_beams, L1_L2_map);
+  get_beamsL2_simpleSeparation(L2_beams);
   n_beams_L2 = L2_beams.size();
   std::vector<int> antennas_L2 = {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15};
   for (int i=0; i<n_beams_L2; i++) {
@@ -46,17 +47,134 @@ void pueoSim::pueoTrigger::get_beamsL1_simpleSeparation(std::vector<std::vector<
   tree->ReadFile("../data/pueoPhotogrammetry_220617.csv","An:X(in):Y(in):Z(in):HorizDist(in):AzCenter(deg):AperAz(deg):AperElev(deg):AntSize(in):description/C",',');
   gErrorIgnoreLevel = kPrint;
 
-  //TTreeReader myReader("ntuple", tree);
-  //TTreeReaderValue<Float_t> myPx(myReader, "An");
-
-  Float_t An, X, Y;
+  double c = 3e8;
+  float inch_to_m = 0.0254;
+  
+  Float_t An, X, Y, Z, Az, r;
+  //tree->Print();
   tree->SetBranchAddress("An",&An);
+  tree->SetBranchAddress("X(in)",&X);
+  tree->SetBranchAddress("Y(in)",&Y);
+  tree->SetBranchAddress("Z(in)",&Z);
+  tree->SetBranchAddress("AzCenter(deg)",&Az);
+  tree->SetBranchAddress("HorizDist(in)",&r);
 
   //for (int i = 0, N = tree->GetEntries(); i < N; ++i) {
   //  tree->GetEntry(i) ;
-  //  std::cout<< An;
+  //  std::cout<< r;
   //  std::cout<< "\n";
   //}
+
+  //Choose beams from at given multiples of azimuthal and elevation angles from the centre of the triggering sector
+  //define centre of sector as elevation perpendicular to the payload, and azimuth the average of the two bottom antennas (for L1) and average of the left/right most two bottom antennas (for L2)
+
+  //1. Find centre of sector by taking bottom antennas and average their azimuth (evaluated from cartesian coordinates)
+  int first_antenna = 0;
+  tree->GetEntry(first_antenna+3);
+  float azimuth_1 = Az;
+  tree->GetEntry((first_antenna +7)%96);
+  float azimuth_2 = Az;
+  float centre_azimuth = (azimuth_1 + azimuth_2)/2;
+  //std::cout << "Centre of sector azimuth = " << centre_azimuth << "\n";
+  float centre_elevation = -10; //positive is defined as above the horizon. The antennas all point down 10 degrees below horizon
+
+
+  //2. Loop through azimuths and elevation angles, then for each antenna,  
+  for (float azimuth = centre_azimuth - 40.; azimuth <= centre_azimuth + 40.01; azimuth +=20.) {
+      //std::cout << "Azimuth = " << azimuth << "\n";
+      
+      for (float elevation = centre_elevation - 40.; elevation <= centre_elevation + 40.01; elevation +=2.) {
+      //std::cout << "Elevation = " << elevation << "\n";
+      
+      
+      tree->GetEntry(first_antenna );
+      
+      double x_0 = cos(elevation/180.*M_PI) * (inch_to_m*Z * tan(elevation/180.*M_PI) - inch_to_m*r * cos((azimuth - Az)/180.*M_PI)) ;
+      
+      std::vector<int> beam;
+      for (int antenna = first_antenna; antenna < (first_antenna + 8) % 96; antenna++) {
+        tree->GetEntry(antenna);
+        double delta_x = x_0 - cos(elevation/180.*M_PI) * (inch_to_m*Z * tan(elevation/180.*M_PI) - inch_to_m*r * cos((azimuth - Az)/180.*M_PI)) ;
+        double delta_samples = delta_x * (2.56e9 / c);
+        //std::cout << delta_samples << "     \t";
+        beam.push_back(int(round(delta_samples)));
+      }
+      L1_beams.push_back(beam);
+      //std::cout <<  "\n";
+    }
+    //std::cout << "\n";
+  }
+
+}
+
+//Define beams at given intervals of deltaPhi and deltaTheta
+void pueoSim::pueoTrigger::get_beamsL2_simpleSeparation(std::vector<std::vector<int>> &L2_beams) {
+  gErrorIgnoreLevel = kError; // Suppress warnings as top two lines not read from photogrammetry file
+  TTree *tree = new TTree("ntuple","data from csv file");
+  tree->ReadFile("../data/pueoPhotogrammetry_220617.csv","An:X(in):Y(in):Z(in):HorizDist(in):AzCenter(deg):AperAz(deg):AperElev(deg):AntSize(in):description/C",',');
+  gErrorIgnoreLevel = kPrint;
+
+  //TTreeReader myReader("ntuple", tree);
+  //TTreeReaderValue<Float_t> myPx(myReader, "An");
+
+  double c = 3e8;
+  float inch_to_m = 0.0254;
+  
+  Float_t An, X, Y, Z, Az, r;
+  //tree->Print();
+  tree->SetBranchAddress("An",&An);
+  tree->SetBranchAddress("X(in)",&X);
+  tree->SetBranchAddress("Y(in)",&Y);
+  tree->SetBranchAddress("Z(in)",&Z);
+  tree->SetBranchAddress("AzCenter(deg)",&Az);
+  tree->SetBranchAddress("HorizDist(in)",&r);
+
+  //for (int i = 0, N = tree->GetEntries(); i < N; ++i) {
+  //  tree->GetEntry(i) ;
+  //  std::cout<< r;
+  //  std::cout<< "\n";
+  //}
+
+  //Choose beams from at given multiples of azimuthal and elevation angles from the centre of the triggering sector
+  //define centre of sector as elevation perpendicular to the payload, and azimuth the average of the two bottom antennas (for L1) and average of the left/right most two bottom antennas (for L2)
+
+  //1. Find centre of sector by taking bottom antennas and average their azimuth (evaluated from cartesian coordinates)
+  int first_antenna = 0;
+  tree->GetEntry(first_antenna+3);
+  float azimuth_1 = Az;
+  tree->GetEntry((first_antenna +15)%96);
+  float azimuth_2 = Az;
+  float centre_azimuth = (azimuth_1 + azimuth_2)/2;
+  //std::cout << "Centre of sector azimuth = " << centre_azimuth << "\n";
+  float centre_elevation = -10; //positive is defined as above the horizon. The antennas all point down 10 degrees below horizon
+
+
+  //2. Loop through azimuths and elevation angles, then for each antenna,  
+  for (float azimuth = centre_azimuth - 40.; azimuth <= centre_azimuth + 40.01; azimuth +=5.) {
+      //std::cout << "Azimuth = " << azimuth << "\n";
+      
+      for (float elevation = centre_elevation - 40.; elevation <= centre_elevation + 40.01; elevation +=2.) {
+      //std::cout << "Elevation = " << elevation << "\n";
+      
+      
+      tree->GetEntry(first_antenna );
+      
+      double x_0 = cos(elevation/180.*M_PI) * (inch_to_m*Z * tan(elevation/180.*M_PI) - inch_to_m*r * cos((azimuth - Az)/180.*M_PI)) ;
+      
+      std::vector<int> beam;
+      for (int antenna = first_antenna; antenna < (first_antenna + 16) % 96; antenna++) {
+        tree->GetEntry(antenna);
+        double delta_x = x_0 - cos(elevation/180.*M_PI) * (inch_to_m*Z * tan(elevation/180.*M_PI) - inch_to_m*r * cos((azimuth - Az)/180.*M_PI)) ;
+        double delta_samples = delta_x * (2.56e9 / c);
+        //std::cout << delta_samples << "     \t";
+        beam.push_back(int(round(delta_samples)));
+      }
+      L2_beams.push_back(beam);
+      //std::cout <<  "\n";
+    }
+    //std::cout << "\n";
+  }
+
 }
 
 void pueoSim::pueoTrigger::generate_beams_L1(std::vector<std::vector<int>> &L1_beams) {

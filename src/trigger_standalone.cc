@@ -75,9 +75,8 @@ void visualiseFields() {
 
 
 double * getImpulse(double theta_offcone_deg, int expected_size) {
-
-  //get PUEO impulse response from csv (based on A3 IR with filter limiting to 0.3-1.2Ghz)
-   
+//get PUEO impulse response from csv (based on A3 IR with filter limiting to 0.3-1.2Ghz), combined with electric field
+//Note that returned array is at 2.94912 Ghz   
 
   TTree *t = new TTree("t", "tree from PUEO_signal_3ghz.csv");
   t->ReadFile("./PUEO_signal_3ghz.csv", "t_ns/D:signal/D");
@@ -109,7 +108,7 @@ double * getImpulse(double theta_offcone_deg, int expected_size) {
 
   //frequencies for plotting in fourier domain
   for(int i=0; i<IR_fft_size; i++){
-    fft_freq[i] = (i * 2.94912E9 / IR_size);
+    fft_freq[i] = (i * 2.94912E9 / IR_size); //This frequency is hardcoded to match that of the impulse file
   }
  
   //do fft
@@ -118,12 +117,12 @@ double * getImpulse(double theta_offcone_deg, int expected_size) {
 
   fftw_destroy_plan(p);
   
-  //plot norm for impulse response FFT
-  double out_norm[IR_fft_size];
-  for(int i = 0; i < IR_fft_size; i++) {
-    out_norm[i] = std::norm(IR_fft[i]);
-    //std::cout << ((double)out_norm[i]) << std::endl;
-  }
+  ////plot norm for impulse response FFT
+  //double out_norm[IR_fft_size];
+  //for(int i = 0; i < IR_fft_size; i++) {
+  //  out_norm[i] = std::norm(IR_fft[i]);
+  //  //std::cout << ((double)out_norm[i]) << std::endl;
+  //}
 
   //TCanvas *c_sig_ft = new TCanvas("c_sig_ft","fourier transformed signal",500,500,600,400);
   //TGraph *gr_sig_ft = new TGraph (IR_fft_size, &fft_freq[0], &out_norm[0]);
@@ -178,6 +177,7 @@ double * getImpulse(double theta_offcone_deg, int expected_size) {
 
 
 double * generate_noise_flat(double norm, int size, double min_freq_Mhz, double max_freq_Mhz, std::mt19937& gen) {
+//generate noise at frequency that matches the signal, at 2.949 Ghz
   int freq_bins = ceil(size / 2.0) + 1;
   double sample_freq_Mhz = 2949.12;
   double nyq_freq_Mhz = sample_freq_Mhz /2;
@@ -220,7 +220,7 @@ double * generate_noise_flat(double norm, int size, double min_freq_Mhz, double 
   return noise_output;
 }
 
-TGraph * combine_signal_noise(double signal_short[], double noise[], int signal_size, int signal_loc, int size, double SNR, double multiplier, double freq_Ghz) {
+TGraph * combine_signal_noise(double signal_short[], double noise[], int signal_size, int signal_loc, int size, double SNR, double multiplier, double freq_hz) {
 
   int size_fft = ceil(size / 2) + 1;
   if (signal_size + signal_loc > size) {
@@ -244,7 +244,7 @@ TGraph * combine_signal_noise(double signal_short[], double noise[], int signal_
   }
 
   for (int i = 0; i < size; i++) {
-    time_bins[i] = i * 1.0 / freq_Ghz / 1E9;
+    time_bins[i] = i * 1.0 / freq_hz;
   }
 
   double * freq_bins = new double[size_fft];
@@ -252,15 +252,15 @@ TGraph * combine_signal_noise(double signal_short[], double noise[], int signal_
     freq_bins[i] = i;
   }
 
-  //check RMS of noise
+  ////check RMS of noise
   //double sum_of_noise_sq = .0;
   //for(int i = 0; i < size; ++i) {
   //  sum_of_noise_sq += pow(noise[i],2);
   //}  
-  //double noise_rms = pow(sum_of_noise_sq/size, 1/2) * 1000000;
-  //std::cout << "RMS of noise " << noise_rms;
+  //double noise_rms = pow(sum_of_noise_sq/size, 1/2) ;
+  //std::cout << "RMS of noise " << noise_rms << "\n";
 
-  //check peak to peak of signal
+  ////check peak to peak of signal
   //double max_of_sig = .0;
   //double min_of_sig = .0;
   //for(int i = 0; i < size; ++i) {
@@ -272,7 +272,7 @@ TGraph * combine_signal_noise(double signal_short[], double noise[], int signal_
   //  }
   //}  
   //double ptp_2 = (max_of_sig - min_of_sig)/2;
-  //std::cout << "signal peak to peak /2 = " << ptp_2;
+  //std::cout << "signal peak to peak /2 = " << ptp_2 << "\n";
 
 
   //do fft on signal and noise to add in momentum space
@@ -327,7 +327,7 @@ TGraph * combine_signal_noise(double signal_short[], double noise[], int signal_
 }
 
 
-TGraph * combine_noise_zero_signal(double noise[], int size, double multiplier, double freq_Ghz) {
+TGraph * combine_noise_zero_signal(double noise[], int size, double multiplier, double freq_hz) {
 
   int size_fft = ceil(size / 2) + 1;
   std::complex<double> * noise_fft = new std::complex<double>[size_fft];
@@ -336,7 +336,7 @@ TGraph * combine_noise_zero_signal(double noise[], int size, double multiplier, 
   double * time_bins = new double[size];
 
   for (int i = 0; i < size; i++) {
-    time_bins[i] = i * 1.0 / freq_Ghz / 1E9;
+    time_bins[i] = i * 1.0 / freq_hz;
   }
 
   double * freq_bins = new double[size_fft];
@@ -379,11 +379,11 @@ TGraph * combine_noise_zero_signal(double noise[], int size, double multiplier, 
   //return noise_tgraph;
 }
 
-std::vector<nicemc::FTPair> signal_gen(std::mt19937& gen, double snr, int n_samples, bool noise_only) {
+std::vector<nicemc::FTPair> signal_gen(std::mt19937& gen, double snr, int n_samples, bool noise_only, double sample_rate_hz) {
 
   //choosing source
-  double theta = 10.0 / 180.0 * M_PI;
-  double phi   = 10.0 / 180.0 * M_PI;
+  double theta = 0.0 ;
+  double phi   = 30.0;
 
 
   //initialising antenna data
@@ -399,7 +399,7 @@ std::vector<nicemc::FTPair> signal_gen(std::mt19937& gen, double snr, int n_samp
   double h2 = 3.0; //vertical separation between adjacent antennas between top two antennas in //a given phi sector
   double h = 2 * h1 + h2;
   double c = 3e8;
-  double delta_t = 1/(2.56e9); //time between samples, for 2.6Ghz sample frequency
+  //double delta_t = 1/(sample_rate_hz); //time between samples
 
  /****
    * label antennas in L2 sector as below
@@ -433,10 +433,10 @@ std::vector<nicemc::FTPair> signal_gen(std::mt19937& gen, double snr, int n_samp
     TGraph * temp_tgraph;
     
     if (noise_only) {
-      temp_tgraph = combine_noise_zero_signal(noise, n_sample_generated, 1., 2.94912);
+      temp_tgraph = combine_noise_zero_signal(noise, n_sample_generated, 1., sample_rate_hz);
     } else {
       double * signal = getImpulse(1, 128);
-      temp_tgraph = combine_signal_noise(signal, noise, 128, 128, n_sample_generated, snr, 1., 2.94912); //double signal_short[], double noise[], int signal_size, int signal_loc, int size, double SNR, double multiplier, double freq_Ghz
+      temp_tgraph = combine_signal_noise(signal, noise, 128, 128, n_sample_generated, snr, 1., sample_rate_hz); //double signal_short[], double noise[], int signal_size, int signal_loc, int size, double SNR, double multiplier, double freq_Ghz
     
     } 
     received_signal_pre_interp[i] = *temp_tgraph;
@@ -445,29 +445,63 @@ std::vector<nicemc::FTPair> signal_gen(std::mt19937& gen, double snr, int n_samp
     delete [] noise;
   }
 
+  //Old way - inaccurate representation of antenna positions
+  /*
   for (int i=0; i<n_samples; i++) {
     
     x[i] = i;
-    y[0][i] =  received_signal_pre_interp[0]  .Eval((i+ sample_padding + 0    * sin (theta) / (c * delta_t) - 0    * sin (phi)  / (c * delta_t) )/2.94912E9  );
-    y[1][i] =  received_signal_pre_interp[1]  .Eval((i+ sample_padding + h2   * sin (theta) / (c * delta_t) - 0    * sin (phi)  / (c * delta_t) )/2.94912E9  );
-    y[2][i] =  received_signal_pre_interp[2]  .Eval((i+ sample_padding + h1+h2* sin (theta) / (c * delta_t) - 0    * sin (phi)  / (c * delta_t) )/2.94912E9  );
-    y[3][i] =  received_signal_pre_interp[3]  .Eval((i+ sample_padding + h    * sin (theta) / (c * delta_t) - 0    * sin (phi)  / (c * delta_t) )/2.94912E9  );
+    y[0][i] =  received_signal_pre_interp[0]  .Eval((i+ sample_padding + 0    * sin (theta) / (c * delta_t) - 0    * sin (phi)  / (c * delta_t) )/sample_rate_hz  );
+    y[1][i] =  received_signal_pre_interp[1]  .Eval((i+ sample_padding + h2   * sin (theta) / (c * delta_t) - 0    * sin (phi)  / (c * delta_t) )/sample_rate_hz  );
+    y[2][i] =  received_signal_pre_interp[2]  .Eval((i+ sample_padding + h1+h2* sin (theta) / (c * delta_t) - 0    * sin (phi)  / (c * delta_t) )/sample_rate_hz  );
+    y[3][i] =  received_signal_pre_interp[3]  .Eval((i+ sample_padding + h    * sin (theta) / (c * delta_t) - 0    * sin (phi)  / (c * delta_t) )/sample_rate_hz  );
 
-    y[4][i] =  received_signal_pre_interp[4]  .Eval((i+ sample_padding + 0    * sin (theta) / (c * delta_t) - w1   * sin (phi)  / (c * delta_t) )/2.94912E9  );
-    y[5][i] =  received_signal_pre_interp[5]  .Eval((i+ sample_padding + h2   * sin (theta) / (c * delta_t) - w1   * sin (phi)  / (c * delta_t) )/2.94912E9  );
-    y[6][i] =  received_signal_pre_interp[6]  .Eval((i+ sample_padding + h1+h2* sin (theta) / (c * delta_t) - w1   * sin (phi)  / (c * delta_t) )/2.94912E9  );
-    y[7][i] =  received_signal_pre_interp[7]  .Eval((i+ sample_padding + h    * sin (theta) / (c * delta_t) - w1   * sin (phi)  / (c * delta_t) )/2.94912E9  );
+    y[4][i] =  received_signal_pre_interp[4]  .Eval((i+ sample_padding + 0    * sin (theta) / (c * delta_t) - w1   * sin (phi)  / (c * delta_t) )/sample_rate_hz  );
+    y[5][i] =  received_signal_pre_interp[5]  .Eval((i+ sample_padding + h2   * sin (theta) / (c * delta_t) - w1   * sin (phi)  / (c * delta_t) )/sample_rate_hz  );
+    y[6][i] =  received_signal_pre_interp[6]  .Eval((i+ sample_padding + h1+h2* sin (theta) / (c * delta_t) - w1   * sin (phi)  / (c * delta_t) )/sample_rate_hz  );
+    y[7][i] =  received_signal_pre_interp[7]  .Eval((i+ sample_padding + h    * sin (theta) / (c * delta_t) - w1   * sin (phi)  / (c * delta_t) )/sample_rate_hz  );
 
-    y[8][i] =  received_signal_pre_interp[8]  .Eval((i+ sample_padding + 0    * sin (theta) / (c * delta_t) - 2*w1 * sin (phi)  / (c * delta_t) )/2.94912E9  );
-    y[9][i] =  received_signal_pre_interp[9]  .Eval((i+ sample_padding + h2   * sin (theta) / (c * delta_t) - 2*w1 * sin (phi)  / (c * delta_t) )/2.94912E9  );
-    y[10][i] = received_signal_pre_interp[10] .Eval((i+ sample_padding + h1+h2* sin (theta) / (c * delta_t) - 2*w1 * sin (phi)  / (c * delta_t) )/2.94912E9  );
-    y[11][i] = received_signal_pre_interp[11] .Eval((i+ sample_padding + h    * sin (theta) / (c * delta_t) - 2*w1 * sin (phi)  / (c * delta_t) )/2.94912E9  );
+    y[8][i] =  received_signal_pre_interp[8]  .Eval((i+ sample_padding + 0    * sin (theta) / (c * delta_t) - 2*w1 * sin (phi)  / (c * delta_t) )/sample_rate_hz  );
+    y[9][i] =  received_signal_pre_interp[9]  .Eval((i+ sample_padding + h2   * sin (theta) / (c * delta_t) - 2*w1 * sin (phi)  / (c * delta_t) )/sample_rate_hz  );
+    y[10][i] = received_signal_pre_interp[10] .Eval((i+ sample_padding + h1+h2* sin (theta) / (c * delta_t) - 2*w1 * sin (phi)  / (c * delta_t) )/sample_rate_hz  );
+    y[11][i] = received_signal_pre_interp[11] .Eval((i+ sample_padding + h    * sin (theta) / (c * delta_t) - 2*w1 * sin (phi)  / (c * delta_t) )/sample_rate_hz  );
 
-    y[12][i] = received_signal_pre_interp[12] .Eval((i+ sample_padding + 0    * sin (theta) / (c * delta_t) - 3*w1 * sin (phi)  / (c * delta_t) )/2.94912E9  );
-    y[13][i] = received_signal_pre_interp[13] .Eval((i+ sample_padding + h2   * sin (theta) / (c * delta_t) - 3*w1 * sin (phi)  / (c * delta_t) )/2.94912E9  );
-    y[14][i] = received_signal_pre_interp[14] .Eval((i+ sample_padding + h1+h2* sin (theta) / (c * delta_t) - 3*w1 * sin (phi)  / (c * delta_t) )/2.94912E9  );
-    y[15][i] = received_signal_pre_interp[15] .Eval((i+ sample_padding + h    * sin (theta) / (c * delta_t) - 3*w1 * sin (phi)  / (c * delta_t) )/2.94912E9  );
+    y[12][i] = received_signal_pre_interp[12] .Eval((i+ sample_padding + 0    * sin (theta) / (c * delta_t) - 3*w1 * sin (phi)  / (c * delta_t) )/sample_rate_hz  );
+    y[13][i] = received_signal_pre_interp[13] .Eval((i+ sample_padding + h2   * sin (theta) / (c * delta_t) - 3*w1 * sin (phi)  / (c * delta_t) )/sample_rate_hz  );
+    y[14][i] = received_signal_pre_interp[14] .Eval((i+ sample_padding + h1+h2* sin (theta) / (c * delta_t) - 3*w1 * sin (phi)  / (c * delta_t) )/sample_rate_hz  );
+    y[15][i] = received_signal_pre_interp[15] .Eval((i+ sample_padding + h    * sin (theta) / (c * delta_t) - 3*w1 * sin (phi)  / (c * delta_t) )/sample_rate_hz  );
   }
+  */
+
+  
+
+
+  //New way - using photogrammetry file
+  
+  gErrorIgnoreLevel = kError; // Suppress warnings as top two lines not read from photogrammetry file
+  TTree *tree = new TTree("ntuple","data from csv file");
+  tree->ReadFile("../data/pueoPhotogrammetry_220617.csv","An:X(in):Y(in):Z(in):HorizDist(in):AzCenter(deg):AperAz(deg):AperElev(deg):AntSize(in):description/C",',');
+  gErrorIgnoreLevel = kPrint;
+
+  float inch_to_m = 0.0254;
+  
+  Float_t An, X, Y, Z, Az, r;
+  //tree->Print();
+  tree->SetBranchAddress("An",&An);
+  tree->SetBranchAddress("X(in)",&X);
+  tree->SetBranchAddress("Y(in)",&Y);
+  tree->SetBranchAddress("Z(in)",&Z);
+  tree->SetBranchAddress("AzCenter(deg)",&Az);
+  tree->SetBranchAddress("HorizDist(in)",&r);
+
+  for (int i=0; i<n_samples; i++) {
+    
+    x[i] = i;
+    for (int i_ant=0; i_ant < 16; i_ant ++) {
+      tree->GetEntry(i_ant);
+      y[i_ant][i] =  received_signal_pre_interp[i_ant]  .Eval((i+ sample_padding)/sample_rate_hz - (cos(theta/180.*M_PI) * (inch_to_m*Z * tan(theta/180.*M_PI) - inch_to_m*r * cos((phi - Az)/180.*M_PI)))/ c  );
+    }
+  }
+  
 
   delete[] received_signal_pre_interp;
 
@@ -484,14 +518,14 @@ std::vector<nicemc::FTPair> signal_gen(std::mt19937& gen, double snr, int n_samp
   return generated_signals;
 }
 
-void visualiseTrigger(int argc, char **argv, int L1_threshold, int L2_threshold, double snr) {
+void visualiseTrigger(int argc, char **argv, int L1_threshold, int L2_threshold, double snr, double sample_rate_hz) {
   TApplication app("app", &argc, argv); //this allows interactive plots for cmake application
 
   std::random_device rd;  // Will be used to obtain a seed for the random number engine
   std::mt19937 gen(rd()); // Standard mersenne_twister_engine seeded with rd()
 
-  std::vector<nicemc::FTPair> internally_generated_signal = signal_gen(gen, snr, 512, false);
-  pueoSim::pueoTrigger * ptrigger = new pueoSim::pueoTrigger(2.56E9);
+  std::vector<nicemc::FTPair> internally_generated_signal = signal_gen(gen, snr, 512, false, sample_rate_hz);
+  pueoSim::pueoTrigger * ptrigger = new pueoSim::pueoTrigger(sample_rate_hz);
   ptrigger->newSignal(internally_generated_signal);
   
   std::cout.precision(5);
@@ -531,10 +565,10 @@ void visualiseTrigger(int argc, char **argv, int L1_threshold, int L2_threshold,
 
 
   //do L1 trigger
-  ptrigger->l1Trigger(8, 16, L1_threshold, 64); //args: ptrigger, step, window, threshold, edge size
+  ptrigger->l1Trigger(8, 16, L1_threshold, 64); //args: step, window, threshold, edge size
 
   //do L2 trigger
-  ptrigger->l2Trigger(8, 16, L2_threshold, 64); //args: ptrigger, step, window, threshold, edge size
+  ptrigger->l2Trigger(8, 16, L2_threshold, 64); //args: step, window, threshold, edge size
 
   //print L1 triggers
   //std::cout << "L1 Triggers" <<"\n";
@@ -559,12 +593,16 @@ void visualiseTrigger(int argc, char **argv, int L1_threshold, int L2_threshold,
   double h2 = 3.0; //vertical separation between adjacent antennas between top two antennas in //a given phi sector
   double h = 2 * h1 + h2;
   double c = 3e8;
-  double delta_t = 1/(2.56e9); //time between samples, for 2.6Ghz sample frequency
+  //double delta_t = 1/(sample_rate_hz); //time between samples
 
   TCanvas *c_L1 = new TCanvas("L1","L1",0,0,600,400);
   TGraph2D *dt_L1 = new TGraph2D();
   dt_L1->SetTitle("Beam heat map L1; Theta; Phi; Coherent Sum Value");
 
+  
+
+  //Old L1 beam plotting
+  /*
   //vertical separation
   int v_max = floor((h * sin(50.0 / 180.0 * M_PI))/ (delta_t * c));
   int v_min = ceil((h * sin(-50.0 / 180.0 * M_PI))/ (delta_t * c));
@@ -588,6 +626,43 @@ void visualiseTrigger(int argc, char **argv, int L1_threshold, int L2_threshold,
       }
       //std::cout << "\n";
    }
+   */
+
+  //new L1 beam plotting using photogrammetry file
+  gErrorIgnoreLevel = kError; // Suppress warnings as top two lines not read from photogrammetry file
+  TTree *tree = new TTree("ntuple","data from csv file");
+  tree->ReadFile("../data/pueoPhotogrammetry_220617.csv","An:X(in):Y(in):Z(in):HorizDist(in):AzCenter(deg):AperAz(deg):AperElev(deg):AntSize(in):description/C",',');
+  gErrorIgnoreLevel = kPrint;
+  
+  Float_t An, X, Y, Z, Az, r;
+  //tree->Print();
+  tree->SetBranchAddress("An",&An);
+  tree->SetBranchAddress("X(in)",&X);
+  tree->SetBranchAddress("Y(in)",&Y);
+  tree->SetBranchAddress("Z(in)",&Z);
+  tree->SetBranchAddress("AzCenter(deg)",&Az);
+  tree->SetBranchAddress("HorizDist(in)",&r);
+
+  int first_antenna = 0;
+  tree->GetEntry(first_antenna+3);
+  float azimuth_1 = Az;
+  tree->GetEntry(first_antenna +7);
+  float azimuth_2 = Az;
+  float centre_azimuth = (azimuth_1 + azimuth_2)/2;
+  //std::cout << "Centre of sector azimuth = " << centre_azimuth << "\n";
+  float centre_elevation = -10; //positive is defined as above the horizon. The antennas all point down 10 degrees below horizon
+
+  //2. Loop through azimuths and elevation angles, then for each antenna,  
+  int beam_L1_count = 0;
+
+  for (float azimuth = centre_azimuth - 40.; azimuth <= centre_azimuth + 40.01; azimuth +=20.) {     
+      for (float elevation = centre_elevation - 40.; elevation <= centre_elevation + 40.01; elevation +=2.) {
+      dt_L1->SetPoint(beam_L1_count,elevation, azimuth,  ptrigger->L1_max_value[beam_L1_count]);
+      beam_L1_count++;
+    }
+  }
+
+  //display L1 plot
   c_L1->cd();
   gStyle->SetPalette(1);
   dt_L1->Draw("surf1");
@@ -610,6 +685,8 @@ void visualiseTrigger(int argc, char **argv, int L1_threshold, int L2_threshold,
   TGraph2D *dt_L2 = new TGraph2D();
   dt_L2->SetTitle("Beam heat map L2; Theta; Phi; Coherent Sum Value");
 
+  //Old L2 beam plotting
+  /*
   //vertical separation
   v_max = floor((h * sin(50.0 / 180.0 * M_PI))/ (delta_t * c));
   v_min = ceil((h * sin(-50.0 / 180.0 * M_PI))/ (delta_t * c));
@@ -633,7 +710,28 @@ void visualiseTrigger(int argc, char **argv, int L1_threshold, int L2_threshold,
       }
      //std::cout << "\n";
    }
+   */
 
+  //new L2 beam plotting using photogrammetry file
+  tree->GetEntry(first_antenna+3);
+  azimuth_1 = Az;
+  tree->GetEntry(first_antenna +15);
+  azimuth_2 = Az;
+  centre_azimuth = (azimuth_1 + azimuth_2)/2;
+  //std::cout << "Centre of sector azimuth = " << centre_azimuth << "\n";
+  centre_elevation = -10; //positive is defined as above the horizon. The antennas all point down 10 degrees below horizon
+
+  //2. Loop through azimuths and elevation angles, then for each antenna,  
+  int beam_L2_count = 0;
+
+  for (float azimuth = centre_azimuth - 40.; azimuth <= centre_azimuth + 40.01; azimuth += 5.) {     
+      for (float elevation = centre_elevation - 40.; elevation <= centre_elevation + 40.01; elevation +=2.) {
+      dt_L2->SetPoint(beam_L2_count,elevation, azimuth,  ptrigger->L2_max_value[beam_L2_count]);
+      beam_L2_count++;
+    }
+  }
+
+  //display L2 plot
   gStyle->SetPalette(1);
   dt_L2->Draw("surf1");
   gPad->Update();
@@ -678,7 +776,7 @@ int main(int argc, char **argv) {
 TApplication app("app", &argc, argv); //interactive plots for reviewing threshold eval. Also needs app.Run() later
 //L1 threshold evaluation - at least 1E4 iterations; fast
 
-//std::vector<nicemc::FTPair> noise_export = signal_gen(gen, .0, 512, true);
+//std::vector<nicemc::FTPair> noise_export = signal_gen(gen, .0, 512, true, samplingFreqHz);
 //TGraph gr = noise_export.at(1).getTimeDomain();
 //gr.SaveAs("exportNoise.csv",".csv");
 //
@@ -689,7 +787,7 @@ TApplication app("app", &argc, argv); //interactive plots for reviewing threshol
 //tThresholdL1->setTriggerScaling(1.0);
 //for (int r=0; r< repeats ; r++) {
 //  //replace signal_gen with pueoSim noise, no signal, vector of 16 FTPairs, each 512 samples
-//  tThresholdL1->L1Threshold_addData(signal_gen(gen, .0, 512, true));
+//  tThresholdL1->L1Threshold_addData(signal_gen(gen, .0, 512, true, samplingFreqHz));
 //  if (r % (repeats/10) == 0) {
 //    std::cout << "L1 iteration " << r << " done" << "\n";
 //  }
@@ -709,7 +807,7 @@ TApplication app("app", &argc, argv); //interactive plots for reviewing threshol
   tThresholdL2->setTriggerScaling(1.0);
   for (int r=0; r< repeats ; r++) {
     //replace signal_gen with pueoSim noise, no signal, vector of 16 FTPairs, each 512 samples
-    tThresholdL2->L2Threshold_addData(signal_gen(gen, .0, 512, true), l1threshold);
+    tThresholdL2->L2Threshold_addData(signal_gen(gen, .0, 512, true, samplingFreqHz), l1threshold);
     if (r % (repeats/10) == 0) {
       std::cout << "L2 iteration " << r << " done" << "\n";
     }
@@ -733,7 +831,7 @@ TApplication app("app", &argc, argv); //interactive plots for reviewing threshol
   ptrigger->setScaling(1);
   for(int run = 0; run < total_pueo_runs; run++ ) {
     //replace signal_gen with pueoSim signal+noise,vector of 16 FTPairs, each 512 samples     
-    ptrigger->newSignal(signal_gen(gen, snr, 512, false));
+    ptrigger->newSignal(signal_gen(gen, snr, 512, false, samplingFreqHz));
     ptrigger->digitize(4);
     ptrigger->l1Trigger(8, 16, l1threshold, 64); //args: step, window, threshold, edge size
     ptrigger->l2Trigger(8, 16, l2threshold, 64); //args: step, window, threshold, edge size
@@ -752,7 +850,7 @@ TApplication app("app", &argc, argv); //interactive plots for reviewing threshol
   auto duration = std::chrono::duration_cast<std::chrono::seconds>(stop - start);
   std::cout << "Runtime: " << duration.count() << " seconds." << std::endl;
 
-  visualiseTrigger(argc, argv, l1threshold, l2threshold, snr);
+  visualiseTrigger(argc, argv, l1threshold, l2threshold, snr, samplingFreqHz);
   
   //app.Run(); //interactive plots for reviewing threshold eval
 
