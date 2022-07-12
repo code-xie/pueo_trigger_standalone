@@ -12,21 +12,11 @@ pueoSim::pueoTrigger::pueoTrigger(float samplingFreqHz_input, int antenna_start)
   samplingFreqHz = samplingFreqHz_input;
   first_antenna = (antenna_start+96)%96;
 
-  //generate_beams_L1(L1_beams);
   get_beamsL1_simpleSeparation(L1_beams);
   n_beams_L1 = L1_beams.size();
-  std::vector<int> antennas_L1 = {0,1,2,3,4,5,6,7};
-  for (int i=0; i<n_beams_L1; i++) {
-	L1_ants.push_back(antennas_L1);
-  }
 
-  //generate_beams_L2(L2_beams, L1_L2_map);
   get_beamsL2_simpleSeparation(L2_beams);
   n_beams_L2 = L2_beams.size();
-  std::vector<int> antennas_L2 = {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15};
-  for (int i=0; i<n_beams_L2; i++) {
-	L2_ants.push_back(antennas_L2);
-  }
 
   
 
@@ -82,7 +72,7 @@ void pueoSim::pueoTrigger::get_beamsL1_simpleSeparation(std::vector<std::vector<
 
 
   //2. Loop through azimuths and elevation angles, then for each antenna,  
-  for (float azimuth = centre_azimuth - 40.; azimuth <= centre_azimuth + 40.01; azimuth +=20.) {
+  for (float azimuth = centre_azimuth - 40.; azimuth <= centre_azimuth + 40.01; azimuth +=10.) {
       //std::cout << "Azimuth = " << azimuth << "\n";
       
       for (float elevation = centre_elevation - 40.; elevation <= centre_elevation + 40.01; elevation +=2.) {
@@ -97,7 +87,7 @@ void pueoSim::pueoTrigger::get_beamsL1_simpleSeparation(std::vector<std::vector<
       for (int antenna = first_antenna; antenna < (first_antenna + 8) ; antenna++) {
         tree->GetEntry((antenna+96) % 96);
         double delta_x = x_0 - cos(elevation/180.*M_PI) * (inch_to_m*Z * tan(elevation/180.*M_PI) - inch_to_m*r * cos((azimuth - Az)/180.*M_PI)) ;
-        double delta_samples = delta_x * (2.56e9 / c);
+        double delta_samples = delta_x * (samplingFreqHz / c);
         //std::cout << delta_samples << "     \t";
         beam.push_back(int(round(delta_samples)));
       }
@@ -166,7 +156,7 @@ void pueoSim::pueoTrigger::get_beamsL2_simpleSeparation(std::vector<std::vector<
       for (int antenna = first_antenna; antenna < first_antenna + 16 ; antenna++) {
         tree->GetEntry((antenna+96) % 96);
         double delta_x = x_0 - cos(elevation/180.*M_PI) * (inch_to_m*Z * tan(elevation/180.*M_PI) - inch_to_m*r * cos((azimuth - Az)/180.*M_PI)) ;
-        double delta_samples = delta_x * (2.56e9 / c);
+        double delta_samples = delta_x * (samplingFreqHz / c);
         //std::cout << delta_samples << "     \t";
         beam.push_back(int(round(delta_samples)));
       }
@@ -178,202 +168,6 @@ void pueoSim::pueoTrigger::get_beamsL2_simpleSeparation(std::vector<std::vector<
 
 }
 
-void pueoSim::pueoTrigger::generate_beams_L1(std::vector<std::vector<int>> &L1_beams) {
-  double w1 = 0.6; //horizontal separation in m between 2 phi sectors
-  double h1 = 0.74; //vertical separation between adjacent antennas for lower 3 antennas in a phi sector
-  double h2 = 3.0; //vertical separation between adjacent antennas between top two antennas in a given phi sector
-  double h = 2 * h1 + h2;
-  double c = 3e8;
-  double delta_t = 1/(2.56e9); //time between samples, for 2.6Ghz sample frequency
-
-  /****
-  * label antennas in L1 sector as below
-  * top
-  * 0  4
-  * 1  5
-  * 2  6
-  * 3  7
-  * bottom
-  **/
-
-  //vertical separation
-  int v_max = floor((h * sin(50.0 / 180.0 * M_PI))/ (delta_t * c));
-  int v_min = ceil((h * sin(-50.0 / 180.0 * M_PI))/ (delta_t * c));
-
-  std::vector<std::vector<int>> vertical;
-  for (int i = v_min; i < v_max+1; i+=2) {
-    std::vector<int> beam;
-    beam.push_back(0);
-    beam.push_back((i / h * h2));
-    beam.push_back((i / h * (h1+h2)));
-    beam.push_back(i);
-    //std::cout << beam.at(0)  << "\t" << beam.at(1) << "\t"<< beam.at(2) << "\t"<< beam.at(3) << "\t" <<"\n";
-    vertical.push_back(beam);
-  }
-
-    //horizontal separation
-  int h_max = floor((w1 * sin(50.0 / 180.0 * M_PI))/ (delta_t * c));
-  int h_min = ceil((w1 * sin(-50.0 / 180.0 * M_PI))/ (delta_t * c));
-  std::vector<std::vector<int>> horizontal;
-  for (int i = h_min; i < h_max+1; i+=2) {
-    std::vector<int> beam;
-    beam.push_back(0);
-    beam.push_back(i);
-    //std::cout << beam.at(0)  << "\t" << beam.at(1) << "\t" <<"\n";
-    horizontal.push_back(beam);
-  }
-
-  //combine vertical and horizontal for beams
-
-  //std::cout << "**********L1 Beams**********" <<"\n";
-
-  for (std::vector<std::vector<int>>::iterator it_v = vertical.begin(); it_v != vertical.end(); ++it_v) {
-    for (std::vector<std::vector<int>>::iterator it_h = horizontal.begin(); it_h != horizontal.end(); ++it_h) {
-      std::vector<int> beam;
-      beam.push_back(round(it_v->at(0)-it_h->at(0)));
-      beam.push_back(round(it_v->at(1)-it_h->at(0)));
-      beam.push_back(round(it_v->at(2)-it_h->at(0)));
-      beam.push_back(round(it_v->at(3)-it_h->at(0)));
-      beam.push_back(round(it_v->at(0)-it_h->at(1)));
-      beam.push_back(round(it_v->at(1)-it_h->at(1)));
-      beam.push_back(round(it_v->at(2)-it_h->at(1)));
-      beam.push_back(round(it_v->at(3)-it_h->at(1)));
-
-      //std::cout << "L1 Beam:\t" << L1_beams.size()<< "\t" << "Offsets:" << "\t"  << beam.at(0)  << "\t" << beam.at(1) << "\t"<< beam.at(2) << "\t"<< beam.at(3) << "\t"<< beam.at(4)  << "\t" << beam.at(5) << "\t"<< beam.at(6) << "\t"<< beam.at(7) << "\t" <<"\n";
-      L1_beams.push_back(beam);
-    }
-  }
-
-
-}
-
-  ////first variable is vector, each element a vector representing an L2 beam, with 16 delay values in that vector
-  ////second variable is vector, each element a vector representing an L1 beam, with corresponding L2 beams in that vector
-void pueoSim::pueoTrigger::generate_beams_L2(std::vector<std::vector<int>> &L2_beams, std::vector<std::vector<int>> &L1_L2_map) {
-  double w1 = 0.6; //horizontal separation in m between 2 adjacent azimuthal sectors
-  double w = 3 * 0.6; //horizontal separation in m between azimuthal sectors furthest apart in L2 sector
-  double h1 = 0.74; //vertical separation between adjacent antennas for lower 3 antennas in a //phi sector
-  double h2 = 3.0; //vertical separation between adjacent antennas between top two antennas in //a given phi sector
-  double h = 2 * h1 + h2;
-  double c = 3e8;
-  double delta_t = 1/(2.56e9); //time between samples, for 2.6Ghz sample frequency
-
-
-    /****
-    * label antennas in L2 sector as below
-    * top
-    * 0  4   8   12
-    * 1  5   9   13
-    * 2  6   10  14
-    * 3  7   11  15
-    * bottom
-    **/
-
-    //vertical separation
-  int v_max = floor((h * sin(50.0 / 180.0 * M_PI))/ (delta_t * c));
-  int v_min = ceil((h * sin(-50.0 / 180.0 * M_PI))/ (delta_t * c));
-
-  std::vector<std::vector<int>> vertical;
-  for (int i = v_min; i < v_max+1; i+=2) {
-    std::vector<int> beam;
-    beam.push_back(0);
-    beam.push_back((i / h * h2));
-    beam.push_back((i / h * (h1+h2)));
-    beam.push_back(i);
-   //std::cout << beam.at(0)  << "\t" << beam.at(1) << "\t"<< beam.at(2) << "\t"<< beam.at(3) << "\t" << "\n";
-    vertical.push_back(beam);
-  }
-
-  //horizontal separation
-  int h_max = floor((w * sin(50.0 / 180.0 * M_PI))/ (delta_t * c));
-  int h_min = ceil((w * sin(-50.0 / 180.0 * M_PI))/ (delta_t * c));
-  std::vector<std::vector<int>> horizontal;
-  for (int i = h_min; i < h_max+1; i+=2) {
-    std::vector<int> beam;
-    beam.push_back(0);
-    beam.push_back((i / 3));
-    beam.push_back((i / 3 * 2));
-    beam.push_back(i);
-    //std::cout << beam.at(0)  << "\t" << beam.at(1) << "\t" << beam.at(2)  << "\t" << beam.at(3) << "\t" <<"\n";
-    horizontal.push_back(beam);
-  }
-
-  //horizontal separation L1
-  int h_max_L1 = floor((w1 * sin(50.0 / 180.0 * M_PI))/ (delta_t * c));
-  int h_min_L1 = ceil((w1 * sin(-50.0 / 180.0 * M_PI))/ (delta_t * c));
-  std::vector<int> horizontal_L1;
-  for (int i = h_min_L1; i < h_max_L1+1; i++) {
-    horizontal_L1.push_back(i);
-    //std::cout << horizontal_L1.at(0)   <<"\n";
-  }
-
-  std::vector<int> empty_map;
-  L1_L2_map = std::vector<std::vector<int>> (vertical.size() * horizontal_L1.size(), empty_map);
-  //std::cout << "L1 L2 map intialised with size " << vertical.size() * horizontal_L1.size()<< "\n";
-
-
-    //combine vertical and horizontal for beams
-
-  int v_counter = 0;
-  //std::cout << "**********L2 Beams**********" <<"\n";
-
-  for (std::vector<std::vector<int>>::iterator it_v = vertical.begin(); it_v != vertical.end(); ++it_v) {
-    for (std::vector<std::vector<int>>::iterator it_h = horizontal.begin(); it_h != horizontal.end(); ++it_h) {
-      std::vector<int> beam;
-      beam.push_back(round(it_v->at(0)-it_h->at(0)));
-      beam.push_back(round(it_v->at(1)-it_h->at(0)));
-      beam.push_back(round(it_v->at(2)-it_h->at(0)));
-      beam.push_back(round(it_v->at(3)-it_h->at(0)));
-      beam.push_back(round(it_v->at(0)-it_h->at(1)));
-      beam.push_back(round(it_v->at(1)-it_h->at(1)));
-      beam.push_back(round(it_v->at(2)-it_h->at(1)));
-      beam.push_back(round(it_v->at(3)-it_h->at(1)));
-      beam.push_back(round(it_v->at(0)-it_h->at(2)));
-      beam.push_back(round(it_v->at(1)-it_h->at(2)));
-      beam.push_back(round(it_v->at(2)-it_h->at(2)));
-      beam.push_back(round(it_v->at(3)-it_h->at(2)));
-      beam.push_back(round(it_v->at(0)-it_h->at(3)));
-      beam.push_back(round(it_v->at(1)-it_h->at(3)));
-      beam.push_back(round(it_v->at(2)-it_h->at(3)));
-      beam.push_back(round(it_v->at(3)-it_h->at(3)));
-
-      //std::cout << "L2 Beam:\t" << L2_beams.size() << "\t" << "Offsets:" << "\t" ;
-      //for (int i = 0; i < beam.size(); i++) {
-      //  std::cout << beam.at(i)  << "\t" ;
-      //}
-      //std::cout <<"\n";
-      L2_beams.push_back(beam);
-
-      //std::cout << "Adding to L1 L2 map" <<"\n";
-      //map L1 beams to L2 beams where the delay between horizontal neighbours are +-1
-      int element_min = std::max(*min_element(horizontal_L1.begin(), horizontal_L1.end()),it_h->at(1)-1);
-      int pos_min = std::distance(horizontal_L1.begin(), std::find(horizontal_L1.begin(), horizontal_L1.end(), element_min));
-
-      int element_max = std::min(*max_element(horizontal_L1.begin(), horizontal_L1.end()),it_h->at(1)+1);
-      int pos_max = std::distance(horizontal_L1.begin(), std::find(horizontal_L1.begin(), horizontal_L1.end(), element_max));
-
-      //std::cout << "matching element ranges: " << element_min << "\t" << element_max  << "\t" << "\n";
-      //std::cout << "matching positions ranges: " << pos_min << "\t" << pos_max  << "\t" << "\n";
-      //std::cout << "matching L1 beams: ";
-      for(int i = v_counter * horizontal_L1.size() + pos_min; i < v_counter * horizontal_L1.size() + pos_max + 1; i++){
-        //std::cout << i << "\t";
-        L1_L2_map.at(i).push_back(L2_beams.size()-1);
-      }
-    }
-    //std::cout << "v_counter" << "\t" << v_counter << "\n";
-    v_counter++;
-
-  }
-
-  //std::cout << "**********L1 L2 Map**********" <<"\n";
-  //for (int i=0; i < L1_L2_map.size(); ++i) {
-  //  std::cout << "L1: " << i << "\t"<< "Mapped L2: " << "\t"  ;
-  //  for (int j=0; j < L1_L2_map.at(i).size(); ++j) {
-  //    std::cout << L1_L2_map.at(i).at(j) << "\t" ;
-  //  }
-  //  std::cout << "\n";
-  //}
-}
 
 void pueoSim::pueoTrigger::newSignal(std::vector<nicemc::FTPair> input_signals) {
   signals.clear();
@@ -771,7 +565,6 @@ void  pueoSim::triggerThreshold::L2Threshold_addData(std::vector<nicemc::FTPair>
   
 
   int n_samples = ptrigger->signals_discrete.at(0).GetN();
-  int number_ants = 16;  
   int step = 8;
   int window = 16;
   int max_shift = 64;
@@ -841,8 +634,8 @@ void  pueoSim::triggerThreshold::L2Threshold_addData(std::vector<nicemc::FTPair>
         int coherent_sum = 0;
         for (int samp_pos=0; samp_pos < window ; samp_pos +=1){
           int coherent_sum_sample = 0;
-          for (int i_ant=0; i_ant<number_ants; i_ant+=1) {
-            coherent_sum_sample += ptrigger->signals_discrete.at(ptrigger->L2_ants.at(i_beam).at(i_ant)).GetPointY(wind_pos+samp_pos-ptrigger->L2_beams.at(i_beam).at(i_ant));
+          for (int i_ant=0; i_ant<ptrigger->n_ant_L2; i_ant+=1) {
+            coherent_sum_sample += ptrigger->signals_discrete.at(i_ant).GetPointY(wind_pos+samp_pos-ptrigger->L2_beams.at(i_beam).at(i_ant));
           }
           int coherent_sum_sqr_sample = coherent_sum_sample * coherent_sum_sample;
           coherent_sum += coherent_sum_sqr_sample;

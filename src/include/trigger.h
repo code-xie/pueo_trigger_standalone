@@ -55,9 +55,7 @@ namespace pueoSim {
     std::vector<TGraph> signals;
     std::vector<TGraph> signals_discrete;
 
-    std::vector<std::vector<int>> L1_ants; //beam number, antenna within beam
     std::vector<std::vector<int>> L1_beams;
-    std::vector<std::vector<int>> L2_ants;
     std::vector<std::vector<int>> L2_beams;
     std::vector<std::vector<int>> L1_L2_map;
 

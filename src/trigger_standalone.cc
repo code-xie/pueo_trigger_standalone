@@ -379,11 +379,10 @@ TGraph * combine_noise_zero_signal(double noise[], int size, double multiplier, 
   //return noise_tgraph;
 }
 
-std::vector<nicemc::FTPair> signal_gen(std::mt19937& gen, double snr, int n_samples, bool noise_only, double sample_rate_hz, int first_antenna) {
+std::vector<nicemc::FTPair> signal_gen(std::mt19937& gen, double theta_deg, double phi_deg, double snr, int n_samples, bool noise_only, double sample_rate_hz, int first_antenna) {
 
-  //choosing source
-  double theta = 0.0 ;
-  double phi   = 0.0;
+  double theta = theta_deg;
+  double phi   = phi_deg;
 
 
   //initialising antenna data
@@ -445,36 +444,6 @@ std::vector<nicemc::FTPair> signal_gen(std::mt19937& gen, double snr, int n_samp
     delete [] noise;
   }
 
-  //Old way - inaccurate representation of antenna positions
-  /*
-  for (int i=0; i<n_samples; i++) {
-    
-    x[i] = i;
-    y[0][i] =  received_signal_pre_interp[0]  .Eval((i+ sample_padding + 0    * sin (theta) / (c * delta_t) - 0    * sin (phi)  / (c * delta_t) )/sample_rate_hz  );
-    y[1][i] =  received_signal_pre_interp[1]  .Eval((i+ sample_padding + h2   * sin (theta) / (c * delta_t) - 0    * sin (phi)  / (c * delta_t) )/sample_rate_hz  );
-    y[2][i] =  received_signal_pre_interp[2]  .Eval((i+ sample_padding + h1+h2* sin (theta) / (c * delta_t) - 0    * sin (phi)  / (c * delta_t) )/sample_rate_hz  );
-    y[3][i] =  received_signal_pre_interp[3]  .Eval((i+ sample_padding + h    * sin (theta) / (c * delta_t) - 0    * sin (phi)  / (c * delta_t) )/sample_rate_hz  );
-
-    y[4][i] =  received_signal_pre_interp[4]  .Eval((i+ sample_padding + 0    * sin (theta) / (c * delta_t) - w1   * sin (phi)  / (c * delta_t) )/sample_rate_hz  );
-    y[5][i] =  received_signal_pre_interp[5]  .Eval((i+ sample_padding + h2   * sin (theta) / (c * delta_t) - w1   * sin (phi)  / (c * delta_t) )/sample_rate_hz  );
-    y[6][i] =  received_signal_pre_interp[6]  .Eval((i+ sample_padding + h1+h2* sin (theta) / (c * delta_t) - w1   * sin (phi)  / (c * delta_t) )/sample_rate_hz  );
-    y[7][i] =  received_signal_pre_interp[7]  .Eval((i+ sample_padding + h    * sin (theta) / (c * delta_t) - w1   * sin (phi)  / (c * delta_t) )/sample_rate_hz  );
-
-    y[8][i] =  received_signal_pre_interp[8]  .Eval((i+ sample_padding + 0    * sin (theta) / (c * delta_t) - 2*w1 * sin (phi)  / (c * delta_t) )/sample_rate_hz  );
-    y[9][i] =  received_signal_pre_interp[9]  .Eval((i+ sample_padding + h2   * sin (theta) / (c * delta_t) - 2*w1 * sin (phi)  / (c * delta_t) )/sample_rate_hz  );
-    y[10][i] = received_signal_pre_interp[10] .Eval((i+ sample_padding + h1+h2* sin (theta) / (c * delta_t) - 2*w1 * sin (phi)  / (c * delta_t) )/sample_rate_hz  );
-    y[11][i] = received_signal_pre_interp[11] .Eval((i+ sample_padding + h    * sin (theta) / (c * delta_t) - 2*w1 * sin (phi)  / (c * delta_t) )/sample_rate_hz  );
-
-    y[12][i] = received_signal_pre_interp[12] .Eval((i+ sample_padding + 0    * sin (theta) / (c * delta_t) - 3*w1 * sin (phi)  / (c * delta_t) )/sample_rate_hz  );
-    y[13][i] = received_signal_pre_interp[13] .Eval((i+ sample_padding + h2   * sin (theta) / (c * delta_t) - 3*w1 * sin (phi)  / (c * delta_t) )/sample_rate_hz  );
-    y[14][i] = received_signal_pre_interp[14] .Eval((i+ sample_padding + h1+h2* sin (theta) / (c * delta_t) - 3*w1 * sin (phi)  / (c * delta_t) )/sample_rate_hz  );
-    y[15][i] = received_signal_pre_interp[15] .Eval((i+ sample_padding + h    * sin (theta) / (c * delta_t) - 3*w1 * sin (phi)  / (c * delta_t) )/sample_rate_hz  );
-  }
-  */
-
-  
-
-
   //New way - using photogrammetry file
   
   gErrorIgnoreLevel = kError; // Suppress warnings as top two lines not read from photogrammetry file
@@ -521,13 +490,13 @@ std::vector<nicemc::FTPair> signal_gen(std::mt19937& gen, double snr, int n_samp
   return generated_signals;
 }
 
-void visualiseTrigger(int argc, char **argv, int L1_threshold, int L2_threshold, double snr, double sample_rate_hz, int antenna_start) {
+void visualiseTrigger(int argc, char **argv, double theta, double phi, int L1_threshold, int L2_threshold, double snr, double sample_rate_hz, int antenna_start) {
   TApplication app("app", &argc, argv); //this allows interactive plots for cmake application
 
   std::random_device rd;  // Will be used to obtain a seed for the random number engine
   std::mt19937 gen(rd()); // Standard mersenne_twister_engine seeded with rd()
 
-  std::vector<nicemc::FTPair> internally_generated_signal = signal_gen(gen, snr, 512, false, sample_rate_hz, antenna_start);
+  std::vector<nicemc::FTPair> internally_generated_signal = signal_gen(gen,theta,phi, snr, 512, false, sample_rate_hz, antenna_start);
   pueoSim::pueoTrigger * ptrigger = new pueoSim::pueoTrigger(sample_rate_hz, antenna_start);
   ptrigger->newSignal(internally_generated_signal);
   
@@ -604,34 +573,7 @@ void visualiseTrigger(int argc, char **argv, int L1_threshold, int L2_threshold,
 
   
 
-  //Old L1 beam plotting
-  /*
-  //vertical separation
-  int v_max = floor((h * sin(50.0 / 180.0 * M_PI))/ (delta_t * c));
-  int v_min = ceil((h * sin(-50.0 / 180.0 * M_PI))/ (delta_t * c));
-  //horizontal separation
-  int h_max = floor((w1 * sin(50.0 / 180.0 * M_PI))/ (delta_t * c));
-  int h_min = ceil((w1 * sin(-50.0 / 180.0 * M_PI))/ (delta_t * c));
-
-  int beam_L1_count = 0;
-  //std::cout  << "L1 heat map\n";
-  //std::cout  << "Theta/Phi\t";
-  //for (int j = h_min; j < h_max+1; j++) {
-  //     std::cout << asin(j * (delta_t * c) / w1) / M_PI * 180 << "\t";
-  //}
-  //std::cout << "\n";
-   for (int i = v_min; i < v_max+1; i+=2) {
-     //std::cout << asin(i * (delta_t * c) / h) / M_PI * 180 << "\t\t";
-      for (int j = h_min; j < h_max+1; j+=2) {
-            //std::cout << ptrigger.L1_max_value[beam_L1_count] << "\t";
-            dt_L1->SetPoint(beam_L1_count,asin(i * (delta_t * c) / h) / M_PI * 180, asin(j * (delta_t * c) / w1) / M_PI * 180,  ptrigger->L1_max_value[beam_L1_count]);
-            beam_L1_count++;
-      }
-      //std::cout << "\n";
-   }
-   */
-
-  //new L1 beam plotting using photogrammetry file
+  //L1 beam plotting using photogrammetry file
   gErrorIgnoreLevel = kError; // Suppress warnings as top two lines not read from photogrammetry file
   TTree *tree = new TTree("ntuple","data from csv file");
   tree->ReadFile("../data/pueoPhotogrammetry_220617.csv","An:X(in):Y(in):Z(in):HorizDist(in):AzCenter(deg):AperAz(deg):AperElev(deg):AntSize(in):description/C",',');
@@ -658,7 +600,7 @@ void visualiseTrigger(int argc, char **argv, int L1_threshold, int L2_threshold,
   //2. Loop through azimuths and elevation angles, then for each antenna,  
   int beam_L1_count = 0;
 
-  for (float azimuth = centre_azimuth - 40.; azimuth <= centre_azimuth + 40.01; azimuth +=20.) {     
+  for (float azimuth = centre_azimuth - 40.; azimuth <= centre_azimuth + 40.01; azimuth +=10.) {     
       for (float elevation = centre_elevation - 40.; elevation <= centre_elevation + 40.01; elevation +=2.) {
       dt_L1->SetPoint(beam_L1_count,elevation, azimuth,  ptrigger->L1_max_value[beam_L1_count]);
       beam_L1_count++;
@@ -688,34 +630,7 @@ void visualiseTrigger(int argc, char **argv, int L1_threshold, int L2_threshold,
   TGraph2D *dt_L2 = new TGraph2D();
   dt_L2->SetTitle("Beam heat map L2; Theta; Phi; Coherent Sum Value");
 
-  //Old L2 beam plotting
-  /*
-  //vertical separation
-  v_max = floor((h * sin(50.0 / 180.0 * M_PI))/ (delta_t * c));
-  v_min = ceil((h * sin(-50.0 / 180.0 * M_PI))/ (delta_t * c));
-  //horizontal separation
-  h_max = floor((w * sin(50.0 / 180.0 * M_PI))/ (delta_t * c));
-  h_min = ceil((w * sin(-50.0 / 180.0 * M_PI))/ (delta_t * c));
-
-  int beam_L2_count = 0;
-  //std::cout  << "L2 heat map\n";
-  //std::cout  << "Theta/Phi\t";
-  //for (int j = h_min; j < h_max+1; j++) {
-  //     std::cout << asin(j * (delta_t * c) / w) / M_PI * 180 << "\t";
-  //}
-  //std::cout << "\n";
-   for (int i = v_min; i < v_max+1; i+=2) {
-     //std::cout << asin(i * (delta_t * c) / h) / M_PI * 180 << "\t\t";
-      for (int j = h_min; j < h_max+1; j+=2) {
-            //std::cout << ptrigger.L2_max_value[beam_L2_count] << "\t";
-            dt_L2->SetPoint(beam_L2_count,asin(i * (delta_t * c) / h) / M_PI * 180, asin(j * (delta_t * c) / w) / M_PI * 180,  ptrigger->L2_max_value[beam_L2_count]);
-            beam_L2_count++;
-      }
-     //std::cout << "\n";
-   }
-   */
-
-  //new L2 beam plotting using photogrammetry file
+  // L2 beam plotting using photogrammetry file
   tree->GetEntry((first_antenna+3)%96);
   azimuth_1 = Az;
   tree->GetEntry((first_antenna +15)%96);
@@ -829,13 +744,13 @@ TApplication app("app", &argc, argv); //interactive plots for reviewing threshol
   //Do runs of trigger with the evaluated thresholds 
   std::cout<< "\n" << "--Trigger on signals with evaluated threshold--" << "\n";
   int total_pueo_runs = 10;
-  double snr = 3.2;
+  double snr = 1.0;
   int L2_triggered_count = 0;
   pueoSim::pueoTrigger * ptrigger = new pueoSim::pueoTrigger(samplingFreqHz, antenna_start);
   ptrigger->setScaling(1);
   for(int run = 0; run < total_pueo_runs; run++ ) {
     //replace signal_gen with pueoSim signal+noise,vector of 16 FTPairs, each 512 samples     
-    ptrigger->newSignal(signal_gen(gen, snr, 512, false, samplingFreqHz, antenna_start));
+    ptrigger->newSignal(signal_gen(gen, 10, 10, snr, 512, false, samplingFreqHz, antenna_start)); //random gen, theta, phi, snr, length, noise_only, samplFreq, first antenna
     ptrigger->digitize(4);
     ptrigger->l1Trigger(8, 16, l1threshold, 64); //args: step, window, threshold, edge size
     ptrigger->l2Trigger(8, 16, l2threshold, 64); //args: step, window, threshold, edge size
@@ -854,7 +769,7 @@ TApplication app("app", &argc, argv); //interactive plots for reviewing threshol
   auto duration = std::chrono::duration_cast<std::chrono::seconds>(stop - start);
   std::cout << "Runtime: " << duration.count() << " seconds." << std::endl;
 
-  visualiseTrigger(argc, argv, l1threshold, l2threshold, snr, samplingFreqHz, antenna_start);
+  visualiseTrigger(argc, argv, 10, 10, l1threshold, l2threshold, snr, samplingFreqHz, antenna_start);
   
   //app.Run(); //interactive plots for reviewing threshold eval
 
