@@ -405,7 +405,7 @@ void pueoSim::pueoTrigger::l2Trigger(int step, int window, int threshold, int ma
 
     }
 
-    //Now cycle through windows and record if a winow triggers. Note that as long as any beam triggers, the trigger for that window is set to //true:
+    //Now cycle through windows and record if a winow triggers. Note that as long as any beam triggers, the trigger for that window is set to true:
     int window_count = 0;
     for(int wind_pos=max_shift; wind_pos < n_samples - max_shift-window -16; wind_pos+=step) {
       if (L1_triggered_windows.at(window_count) == true) {
