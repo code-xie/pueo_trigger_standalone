@@ -1072,7 +1072,7 @@ int main(int argc, char **argv) {
   
 
   //L2 threshold evaluation - should be at least 1E4; slow 
-  
+  /*
   std::cout<< "\n" << "--L2 threshold evaluation--" << "\n";
   repeats = 1E3;
   pueoSim::triggerThreshold * tThresholdL2 = new pueoSim::triggerThreshold(samplingFreqHz,0);
@@ -1093,12 +1093,13 @@ int main(int argc, char **argv) {
   std::cout << "Runtime: " << duration_L2.count() << " seconds." << std::endl;
 
   //app.Run(); //interactive plots for reviewing threshold eval
+  */
+
   
-  /*
   //Do runs of trigger with the evaluated thresholds 
   std::cout<< "\n" << "--Trigger on signals with evaluated threshold--" << "\n";
-  int total_pueo_runs = 10;
-  double snr = 1.3;
+  int total_pueo_runs = 100;
+  double snr = 2.3;
   int L2_triggered_count = 0;
   pueoSim::pueoTrigger * ptrigger = new pueoSim::pueoTrigger(samplingFreqHz, antenna_start);
   ptrigger->setScaling(scaling);
@@ -1131,7 +1132,7 @@ int main(int argc, char **argv) {
   visualiseTrigger(argc, argv, 10, 10, l1threshold, l2threshold, signal_size, snr, samplingFreqHz, antenna_start);
 
   //app.Run(); //interactive plots for reviewing threshold eval
- */
+ 
   return 0;
 }
 

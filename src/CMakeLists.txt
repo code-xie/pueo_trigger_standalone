@@ -8,7 +8,7 @@
 
 # Locate the ROOT package and define a number of useful targets and variables.
    find_package(ROOT 6.20 CONFIG REQUIRED)
-   #set(CMAKE_BUILD_TYPE Debug)
+   set(CMAKE_BUILD_TYPE Debug)
    #find_package(FFTW REQUIRED)
 #   include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
    include_directories(${PROJECT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/include )

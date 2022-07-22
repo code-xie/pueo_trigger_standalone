@@ -437,50 +437,50 @@ void pueoSim::pueoTrigger::l1Trigger(int step, int window, int threshold, int ma
 
   //Do first L1 sector
   for(int i_beam=0; i_beam <  n_beams_L1; i_beam += 1) {
-  int waveform_length = signals_discrete.at(0).GetN();
-  int total_shifted[waveform_length]={0};
+    int waveform_length = signals_discrete.at(0).GetN();
+    int total_shifted[waveform_length]={0};
 
-  std::vector<int> beam = L1_beams.at(i_beam);
+    std::vector<int> beam = L1_beams.at(i_beam);
 
-  //sum signals across antennas after shifting each based on beam definition
-  for (int i_ant=0;i_ant<n_ant_L1;i_ant++){
-    TGraph signal_ant = signals_discrete.at(i_ant);
-    int beam_delay = beam.at(i_ant);
+    //sum signals across antennas after shifting each based on beam definition
+    for (int i_ant=0;i_ant<n_ant_L1;i_ant++){
+      TGraph signal_ant = signals_discrete.at(i_ant);
+      int beam_delay = beam.at(i_ant);
 
+      for (int samp_pos=0;samp_pos<waveform_length;samp_pos++){
+        total_shifted[samp_pos]+= signal_ant.GetPointY(samp_pos-beam_delay);
+        //std::cout<<"here! "<<samp_pos<<", "<<total_shifted[samp_pos]<<std::endl;
+
+      }
+    }
+
+    //square so that total_shifted has power:
     for (int samp_pos=0;samp_pos<waveform_length;samp_pos++){
-      total_shifted[samp_pos]+= signal_ant.GetPointY(samp_pos-beam_delay);
-      //std::cout<<"here! "<<samp_pos<<", "<<total_shifted[samp_pos]<<std::endl;
-
+      total_shifted[samp_pos]=pow(total_shifted[samp_pos],2);
+      //std::cout<<"shifted val is "<<total_shifted[samp_pos]<<std::endl;
     }
-  }
+    //Now cycle through windows and record if a winow triggers. Note that as long as any beam triggers, the trigger for that window is set to //true:
+    int window_count = 0;
 
-  //square so that total_shifted has power:
-  for (int samp_pos=0;samp_pos<waveform_length;samp_pos++){
-    total_shifted[samp_pos]=pow(total_shifted[samp_pos],2);
-    //std::cout<<"shifted val is "<<total_shifted[samp_pos]<<std::endl;
-  }
-  //Now cycle through windows and record if a winow triggers. Note that as long as any beam triggers, the trigger for that window is set to //true:
-  int window_count = 0;
+    for(int wind_pos=max_shift; wind_pos < n_samples - max_shift-window -16; wind_pos+=step) {
+      int coherent_sum = 0;
 
-  for(int wind_pos=max_shift; wind_pos < n_samples - max_shift-window -16; wind_pos+=step) {
-    int coherent_sum = 0;
+      for (int samp_pos=0;samp_pos<window; samp_pos++){
+      coherent_sum+=total_shifted[wind_pos+samp_pos];
+      }
+      //std::cout<<"coherent sum: "<<coherent_sum <<", threshold: "<<threshold << std::endl;
+      if(coherent_sum>threshold){
+      //std::cout<<"triggered l1!"<<std::endl;
+      L1_triggered_windows.at(window_count)=true;
+      }
 
-    for (int samp_pos=0;samp_pos<window; samp_pos++){
-    coherent_sum+=total_shifted[wind_pos+samp_pos];
+      //This is used for visualisation purposes, not required for the simulation itself
+      if (coherent_sum > L1_max_value.at(i_beam)){
+        L1_max_value.at(i_beam) = coherent_sum;
+      }
+
+      window_count++;
     }
-    //std::cout<<"coherent sum: "<<coherent_sum <<", threshold: "<<threshold << std::endl;
-    if(coherent_sum>threshold){
-    //std::cout<<"triggered l1!"<<std::endl;
-    L1_triggered_windows.at(window_count)=true;
-    }
-
-    //This is used for visualisation purposes, not required for the simulation itself
-    if (coherent_sum > L1_max_value.at(i_beam)){
-      L1_max_value.at(i_beam) = coherent_sum;
-    }
-
-    window_count++;
-  }
 
   }
 
@@ -596,10 +596,15 @@ void pueoSim::pueoTrigger::l2Trigger(int step, int window, int threshold, int ma
     int waveform_length = signals_discrete.at(0).GetN();
     int total_shifted[waveform_length]={0};
 
+    std::vector<int> beam = L2_beams.at(i_beam);
+
     //sum signals across antennas after shifting each based on beam definition
     for (int i_ant=0;i_ant<n_ant_L2;i_ant++){
+      TGraph * signal_ant = &signals_discrete.at(i_ant);
+      int beam_delay = beam.at(i_ant);
+
       for (int samp_pos=0;samp_pos<waveform_length;samp_pos++){
-        total_shifted[samp_pos]+= signals_discrete.at(i_ant).GetPointY(samp_pos-L2_beams.at(i_beam).at(i_ant));
+        total_shifted[samp_pos]+= signal_ant->GetPointY(samp_pos-beam_delay);
         //std::cout<<"here! "<<samp_pos<<", "<<total_shifted[samp_pos]<<std::endl;
         //std::cout << total_shifted[samp_pos] << " ";
       }
@@ -609,7 +614,7 @@ void pueoSim::pueoTrigger::l2Trigger(int step, int window, int threshold, int ma
     //square so that total_shifted has power:
     for (int samp_pos=0;samp_pos<waveform_length;samp_pos++){
 
-      total_shifted[samp_pos]=total_shifted[samp_pos]*total_shifted[samp_pos];
+      total_shifted[samp_pos]=pow(total_shifted[samp_pos],2);
 
     }
 
