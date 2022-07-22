@@ -193,7 +193,8 @@ void pueoSim::pueoTrigger::digitize(int bits) {
   int digitise_min = -1 * digitise_max;
 
   std::vector<TGraph>::iterator it_ant;
-  it_ant=signals.begin();
+  //it_ant=signals.begin();
+  signals_discrete.clear();
 
   for (it_ant=signals.begin();it_ant!=signals.end(); ++it_ant) {
 
@@ -201,7 +202,6 @@ void pueoSim::pueoTrigger::digitize(int bits) {
     TGraph *gr_digi = & signals_discrete.back();
 
     const int n = it_ant->GetN();
-    int yout[n];
 
     for (int i=0; i<gr_digi->GetN(); i++) {
       int digitised_y;
@@ -212,12 +212,210 @@ void pueoSim::pueoTrigger::digitize(int bits) {
         digitised_y = digitise_min;
       } else {
         digitised_y = round(scaled_y);
+        //digitised_y = scaled_y;
       }
 
       gr_digi->SetPointY(i,digitised_y );
     }
   }
 }
+
+void pueoSim::pueoTrigger::digitize_afterFilter(int bits) {
+  int digitise_max = pow(2,bits-1)-1;
+  int digitise_min = -1 * digitise_max;
+
+  std::vector<TGraph>::iterator it_ant;
+  //it_ant=signals.begin();
+  signals_discrete.clear();
+
+  for (it_ant=signals_filtered.begin();it_ant!=signals_filtered.end(); ++it_ant) {
+
+    signals_discrete.emplace_back(*it_ant);
+    TGraph *gr_digi = & signals_discrete.back();
+
+    const int n = it_ant->GetN();
+
+    for (int i=0; i<gr_digi->GetN(); i++) {
+      int digitised_y;
+      double scaled_y = gr_digi->GetPointY(i) * scaling;
+      if (scaled_y > digitise_max) {
+        digitised_y = digitise_max;
+      } else if (scaled_y < digitise_min) {
+        digitised_y = digitise_min;
+      } else {
+        digitised_y = round(scaled_y);
+        //digitised_y = scaled_y;
+        //std::cout << scaled_y << "\t\t" << round(scaled_y) << "\n";
+      }
+
+      gr_digi->SetPointY(i,digitised_y );
+    }
+  }
+}
+
+void pueoSim::pueoTrigger::firFilter() {
+
+  double filter[] = {0, 0.0475, 0, -0.0938, 0, 0.3046, 0.4832, 0.3046, 0, -0.0938, 0, 0.0475, 0};
+  int filter_size = 13;
+
+  std::vector<TGraph>::iterator it_ant;
+  signals_filtered.clear();
+
+  for (it_ant=signals_discrete.begin();it_ant!=signals_discrete.end(); ++it_ant) {
+    signals_filtered.emplace_back(*it_ant);
+    TGraph *gr_fir = & signals_filtered.back();
+
+    int signal_size = gr_fir->GetN();
+    for (int i=0; i < signal_size; i++) {
+      double  acc = 0;
+      for (int j=0; j < filter_size; j++) {
+        if ((i-j) > -1) {
+            //std::cout << it_ant->GetPointY(i-j) << " ";
+            acc += it_ant->GetPointY(i-j) * filter[j];
+        }
+      }
+      //std::cout << std::endl;
+      gr_fir->SetPointY(i, acc);
+    //std::cout << acc << " ";
+    }
+    //std::cout << std::endl;
+
+  }
+
+  
+
+}
+
+void pueoSim::pueoTrigger::firFilter_signal_to_fir() {
+
+  double filter[] = {0, 0.0475, 0, -0.0938, 0, 0.3046, 0.4832, 0.3046, 0, -0.0938, 0, 0.0475, 0};
+  //double filter[] =  {0.0467, 0.0849, -0.0647, -0.0821, 0.0441, 0.3157, 0.4479, 0.3157, 0.0441, -0.0821, -0.0647, 0.0849, 0.0467};
+  int filter_size = 13;
+
+  std::vector<TGraph>::iterator it_ant;
+  signals_filtered.clear();
+
+  //testing variable
+  bool testDone = false;
+  double filter_output[512]; 
+  double filter_input[512]; 
+
+  for (it_ant=signals.begin();it_ant!=signals.end(); ++it_ant) {
+    signals_filtered.emplace_back(*it_ant);
+    TGraph *gr_fir = & signals_filtered.back();
+
+    int signal_size = gr_fir->GetN();
+    for (int i=0; i < signal_size; i++) {
+      double  acc = 0;
+      for (int j=0; j < filter_size; j++) {
+        if ((i-j) > -1) {
+            //std::cout << it_ant->GetPointY(i-j) << " ";
+            acc += it_ant->GetPointY(i-j) * filter[j];
+        }
+      }
+      //std::cout << std::endl;
+      gr_fir->SetPointY(i, acc);
+      if (!testDone) {
+        filter_output[i] = acc;
+      }
+
+    //std::cout << acc << " ";
+    }
+    //std::cout << std::endl;
+    //
+    if (!testDone) {
+      for (int i=0; i < signal_size; i++) {
+        filter_input[i] = it_ant->GetPointY(i);
+      }
+    }
+    testDone = true;
+  }
+
+  /*
+  //plot tests
+  int size = 512;
+  int size_fft = ceil(size / 2) + 1;
+
+  double * freq_bins = new double[size_fft];
+  for (int i = 0; i < size_fft; i++) {
+    freq_bins[i] = i;
+  }
+
+  double * time_bins = new double[size];
+  double freq_hz = 2.56E9;
+  for (int i = 0; i < size; i++) {
+    time_bins[i] = i * 1.0 / freq_hz;
+  }
+
+  //input fft norm plot
+  std::complex<double> * input_fft = new std::complex<double>[size_fft];
+  double * input_fft_norm = new double[size_fft];
+
+  fftw_plan p = fftw_plan_dft_r2c_1d(size, &filter_input[0] , reinterpret_cast<fftw_complex*>(&input_fft[0]) , FFTW_ESTIMATE);
+  fftw_execute(p);
+  fftw_destroy_plan(p);
+
+  for (int i = 0; i < size_fft; i++) {
+    input_fft_norm[i] = std::norm(input_fft[i]);
+    //std::cout << input_fft_norm[i] << " ";
+  }
+  //std::cout << std::endl;
+
+  TGraph *input_fft_norm_tgraph = new TGraph (size_fft,&freq_bins[0], &input_fft_norm[0]);
+  TCanvas *d3 = new TCanvas("d3","d3",500,500,600,400);
+  d3->cd();
+  input_fft_norm_tgraph -> Draw();
+
+  //output fft norm plot
+  std::complex<double> * output_fft = new std::complex<double>[size_fft];
+  double * output_fft_norm = new double[size_fft];
+
+  p = fftw_plan_dft_r2c_1d(size, &filter_output[0] , reinterpret_cast<fftw_complex*>(&output_fft[0]) , FFTW_ESTIMATE);
+  fftw_execute(p);
+  fftw_destroy_plan(p);
+
+  for (int i = 0; i < size_fft; i++) {
+    output_fft_norm[i] = std::norm(output_fft[i]);
+    //std::cout << input_fft_norm[i] << " ";
+  }
+  //std::cout << std::endl;
+
+  TGraph *output_fft_norm_tgraph = new TGraph (size_fft,&freq_bins[0], &output_fft_norm[0]);
+  TCanvas *d4 = new TCanvas("d4","d4",500,500,600,400);
+  d4->cd();
+  output_fft_norm_tgraph -> Draw();
+
+  //input timedomain plot
+  TGraph *input_tgraph = new TGraph (size,&time_bins[0], &filter_input[0]);
+  TCanvas *d6 = new TCanvas("d6","d6",500,500,600,400);
+  d6->cd();
+  input_tgraph -> Draw();
+
+  //output timedomain plot
+  TGraph *output_tgraph = new TGraph (size,&time_bins[0], &filter_output[0]);
+  TCanvas *d5 = new TCanvas("d5","d5",500,500,600,400);
+  d5->cd();
+  output_tgraph -> Draw();
+
+  //get RMS
+  double squared_sum = 0;
+  for (int i = 0; i < size; i++) {
+    squared_sum += filter_input[i] *filter_input[i] ;
+  }
+  std::cout << "Input RMS: " << sqrt(squared_sum/size);
+
+  squared_sum = 0;
+  for (int i = 0; i < size; i++) {
+    squared_sum += filter_output[i] * filter_output[i];
+  }
+  std::cout << "Output RMS: " << sqrt(squared_sum/size);
+  std::cout << std::endl;
+
+  */
+
+
+}
+
 
 
 void pueoSim::pueoTrigger::l1Trigger(int step, int window, int threshold, int max_shift) {
@@ -475,6 +673,9 @@ void pueoSim::triggerThreshold::setTriggerScaling(float multiplier) {
 void pueoSim::triggerThreshold::L1Threshold_addData(std::vector<nicemc::FTPair> input_signals) {
   ptrigger->newSignal(input_signals);
   ptrigger->digitize(4);
+  ptrigger->firFilter_signal_to_fir();
+  ptrigger->digitize_afterFilter(4);
+
   
   int n_samples = ptrigger->signals_discrete.at(0).GetN();
   int number_ants = 8;  
@@ -526,17 +727,23 @@ void pueoSim::triggerThreshold::L1Threshold_addData(std::vector<nicemc::FTPair> 
 
 }
 
-int pueoSim::triggerThreshold::L1Threshold_eval() {  
+int pueoSim::triggerThreshold::L1Threshold_eval(double sample_rate) {  
 
   double stdev =  TMath::StdDev(coherent_values.begin(), coherent_values.end() );
   double mean =  TMath::Mean(coherent_values.begin(), coherent_values.end() );
   double size =  coherent_values.size();
   std::cout << "\nCount = " << size << ", STDeV = " << stdev << ", Mean = " << mean << "\n\n";
 
+
+  TCanvas *g1 = new TCanvas("g1","g1",500,500,600,400);
+  g1->cd();
+
   TH1D * h1 = new TH1D("Histogram for L1","Histogram for L1",100,0.,8 * stdev + mean);
   for (int i = 0; i < coherent_values.size(); i++) {
     h1->Fill(coherent_values.at(i));
   }
+
+
 
   TF1 * f1 = new TF1("f1","expo");
   f1->SetParameters(1,1);
@@ -548,11 +755,11 @@ int pueoSim::triggerThreshold::L1Threshold_eval() {
   gPad->SetLogy();
 
   double sector_rate = 1E6;
-  double sample_rate = 2.56E9;
   double step = 8;
 
+
   
-  return round((std::log(sector_rate * step / sample_rate / ptrigger->n_beams_L1 *  window_count ) - fitFunc->GetParameter(0) ) / fitFunc->GetParameter(1));
+  return round((std::log(sector_rate * step / sample_rate / ptrigger->n_beams_L1 *  window_count * (1 - exp((8 * stdev + mean)/100 *  fitFunc->GetParameter(1)))) - fitFunc->GetParameter(0) ) / fitFunc->GetParameter(1));
 
 }
 
@@ -560,8 +767,11 @@ int pueoSim::triggerThreshold::L1Threshold_eval() {
 void  pueoSim::triggerThreshold::L2Threshold_addData(std::vector<nicemc::FTPair> input_signals, int L1Threshold) {
   ptrigger->newSignal(input_signals);
   ptrigger->digitize(4);
+  ptrigger->firFilter_signal_to_fir();
+  ptrigger->digitize_afterFilter(4);
+
   ptrigger->l1Trigger(8, 16, L1Threshold, 64);
-  
+ 
   
 
   int n_samples = ptrigger->signals_discrete.at(0).GetN();
@@ -653,12 +863,16 @@ void  pueoSim::triggerThreshold::L2Threshold_addData(std::vector<nicemc::FTPair>
 //*/
 }
 
-int  pueoSim::triggerThreshold::L2Threshold_eval() {  
+int  pueoSim::triggerThreshold::L2Threshold_eval(double sample_rate) {  
 
   double stdev =  TMath::StdDev(coherent_values.begin(), coherent_values.end() );
   double mean =  TMath::Mean(coherent_values.begin(), coherent_values.end() );
   double size =  coherent_values.size();
   std::cout << "\nCount = " << size << ", STDeV = " << stdev << ", Mean = " << mean << "\n\n";
+
+  TCanvas *g2 = new TCanvas("g2","g2",500,500,600,400);
+  g2->cd();
+
 
   TH1D * h1 = new TH1D("Histogram for L2","Histogram for L2",100,0.,8 * stdev + mean);
   for (int i = 0; i < coherent_values.size(); i++) {
@@ -672,9 +886,8 @@ int  pueoSim::triggerThreshold::L2Threshold_eval() {
   //std::cout << "p0=" << fitFunc->GetParameter(0) << " p1=" << fitFunc->GetParameter(1) ;
 
   double sector_rate = 12;
-  double sample_rate = 2.56E9;
   double step = 8;
-  int l2threshold = round((std::log(sector_rate * step / sample_rate *  window_count ) - fitFunc->GetParameter(0) ) / fitFunc->GetParameter(1));
+  int l2threshold = round((std::log(sector_rate * step / sample_rate *  window_count * (1 - exp((8 * stdev + mean)/100 *  fitFunc->GetParameter(1))) ) - fitFunc->GetParameter(0) ) / fitFunc->GetParameter(1));
   //std::cout<< "\n" << "L2 threshold " << l2threshold << "\n";
 
   h1->Draw();

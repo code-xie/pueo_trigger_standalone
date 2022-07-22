@@ -54,6 +54,7 @@ namespace pueoSim {
 
     std::vector<TGraph> signals;
     std::vector<TGraph> signals_discrete;
+    std::vector<TGraph> signals_filtered;
 
     std::vector<std::vector<int>> L1_beams;
     std::vector<std::vector<int>> L2_beams;
@@ -66,6 +67,9 @@ namespace pueoSim {
     void get_beamsL2_simpleSeparation(std::vector<std::vector<int>> &L2_beams);
     void newSignal(std::vector<nicemc::FTPair> input_signals);
     void digitize(int bits);
+    void digitize_afterFilter(int bits);
+    void firFilter();
+    void firFilter_signal_to_fir();
     void l1Trigger(int step, int window, int threshold, int max_shift);
     void l2Trigger(int step, int window, int threshold, int max_shift);
 
@@ -90,9 +94,9 @@ namespace pueoSim {
 
         void setTriggerScaling(float multiplier) ;
         void L1Threshold_addData(std::vector<nicemc::FTPair> input_signals);
-        int L1Threshold_eval();
+        int L1Threshold_eval(double samplingFreqHz);
         void L2Threshold_addData(std::vector<nicemc::FTPair> input_signals, int L1Threshold);
-        int L2Threshold_eval();
+        int L2Threshold_eval(double samplingFreqHz);
   };
 
   

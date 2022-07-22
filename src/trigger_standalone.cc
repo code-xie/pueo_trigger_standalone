@@ -176,10 +176,10 @@ double * getImpulse(double theta_offcone_deg, int expected_size) {
 }
 
 
-double * generate_noise_flat(double norm, int size, double min_freq_Mhz, double max_freq_Mhz, std::mt19937& gen) {
-//generate noise at frequency that matches the signal, at 2.949 Ghz
+double * generate_noise_flat(double norm, int size, double min_freq_Mhz, double max_freq_Mhz, std::mt19937& gen, double sample_rate_hz) {
+//generate noise at sampling frequency, since we don't re-interpolate
   int freq_bins = ceil(size / 2.0) + 1;
-  double sample_freq_Mhz = 2949.12;
+  double sample_freq_Mhz = sample_rate_hz / 1E6;
   double nyq_freq_Mhz = sample_freq_Mhz /2;
   double scaling = norm / sqrt(size);
 
@@ -196,6 +196,26 @@ double * generate_noise_flat(double norm, int size, double min_freq_Mhz, double 
        freq_output[f] = std::complex<double>(0, 0);
     }
   }
+
+  //plt
+  //double *  freq_output_xaxis = new double[freq_bins];
+  //for (int i = 0; i < freq_bins; i++) {
+  //  freq_output_xaxis[i] = i;
+  //}
+
+  //double * freq_output_norm = new double[freq_bins]; 
+  //for (int i = 0; i < freq_bins; i++) {
+  //  freq_output_norm[i] = std::norm(freq_output[i]);
+  //}
+
+  //TCanvas *c_noise = new TCanvas("c_noise","c_noise",500,500,600,400);
+  //TGraph *gr_noise = new TGraph (freq_bins,&freq_output_xaxis[0], &freq_output_norm[0]);
+  //c_noise->cd();
+  //gr_noise->Draw();
+
+  //delete[] freq_output_xaxis;
+  //delete[] freq_output_norm;
+
 
   int time_bins = (freq_bins - 1) * 2;
 
@@ -544,10 +564,11 @@ std::vector<nicemc::FTPair> signal_gen(std::mt19937& gen, double theta_deg, doub
 
   if (noise_only) { 
     for (int i_ant=0; i_ant < 16; i_ant ++) {
-      double * noise = generate_noise_flat(0.8343, n_samples, 240, 1300, gen);
+      double * noise = generate_noise_flat(0.786422593, n_samples, 240, 1300, gen, sample_rate_hz);
       for (int i=0; i<n_samples; i++) {
         y[i_ant][i] =  noise[i];
       }
+      delete [] noise;
     }
 
     for (int i_ant=0; i_ant<pueoSim::pueoTrigger::n_ant_L2; i_ant++) {
@@ -568,15 +589,15 @@ std::vector<nicemc::FTPair> signal_gen(std::mt19937& gen, double theta_deg, doub
     
     //Create 16 copies of signal, note will be at sample rate of signal provided
     for (int i_ant=0; i_ant < 16; i_ant ++) {
-      //TGraph * temp_tgraph;
-      //temp_tgraph = insert_signal_in_location(signal, 128, n_sample_generated/2, n_sample_generated, 2.949E9);
-      received_signal_pre_interp[i_ant] = *insert_signal_in_location(signal, 128, n_sample_generated/2, n_sample_generated, 2.949E9);;
-      //delete temp_tgraph;
+      TGraph * temp_tgraph;
+      temp_tgraph = insert_signal_in_location(signal, 128, n_sample_generated/2, n_sample_generated, 2.949E9);
+      received_signal_pre_interp[i_ant] = *temp_tgraph;
+      delete temp_tgraph;
     }
 
     //Insert delays, as well as interpolating to trigger sample rate
     gErrorIgnoreLevel = kError; // Suppress warnings as top two lines not read from photogrammetry file
-    TTree *tree = new TTree("ntuple","data from csv file");
+    TTree * tree = new TTree("ntuple","data from csv file");
     tree->ReadFile("../data/pueoPhotogrammetry_220617.csv","An:X(in):Y(in):Z(in):HorizDist(in):AzCenter(deg):AperAz(deg):AperElev(deg):AntSize(in):description/C",',');
     gErrorIgnoreLevel = kPrint;
 
@@ -611,7 +632,8 @@ std::vector<nicemc::FTPair> signal_gen(std::mt19937& gen, double theta_deg, doub
 
     //combine with noise
     for (int i_ant=0; i_ant < 16; i_ant ++) {
-      double * noise = generate_noise_flat(0.8343, n_samples, 240, 1300, gen);
+      double * noise = generate_noise_flat(0.786422593, n_samples, 240, 1300, gen, sample_rate_hz);
+      //double * noise = generate_noise_flat(0.0, n_samples, 240, 1300, gen, sample_rate_hz);
       TGraph * temp_tgraph;
       temp_tgraph = combine_noise_shifted_signal(y_signalOnly[i_ant], noise, n_samples, snr, 1., sample_rate_hz); //double signal_short[], double noise[], int size, double SNR, double multiplier, double freq_hz
       
@@ -628,16 +650,6 @@ std::vector<nicemc::FTPair> signal_gen(std::mt19937& gen, double theta_deg, doub
 
   }
   
-  
-  
-
-
-
-
-
-
-
-
   //Old - add noise and signal and then interpolate
   /*
   TGraph * received_signal_pre_interp = new TGraph[16];
@@ -716,6 +728,91 @@ std::vector<nicemc::FTPair> signal_gen(std::mt19937& gen, double theta_deg, doub
   */
 }
 
+double * lowPassFilterFIR(double input[], double filter[], int signal_size, int filter_size) {
+  //std::cout << "Sizes: " << signal_size << " " << filter_size << " " << std::endl;  
+  double * output = new double[signal_size];
+  //std::cout << "Low pass printout" << std::endl;
+  for (int i=0; i < signal_size; i++) {
+    double  acc = 0;
+    for (int j=0; j < filter_size; j++) {
+      if ((i-j) > -1) {
+         acc += input[i-j] * filter[j];
+
+      }
+    }
+    output[i] = acc;
+    //std::cout << output[i] << " ";
+  }
+  //std::cout << std::endl;
+  return output;
+}
+
+void testFiterFIR() {
+  int size = 512;
+  int size_fft = ceil(size / 2) + 1;
+
+  //test signal
+  double input[size]= {0, 0, 0, 0, 0, 0, 1.0}; //rest are zeros
+  std::complex<double> * input_fft = new std::complex<double>[size_fft];
+  double * input_fft_norm = new double[size_fft];
+
+  //test signal in FFT
+  fftw_plan p = fftw_plan_dft_r2c_1d(size, &input[0] , reinterpret_cast<fftw_complex*>(&input_fft[0]) , FFTW_ESTIMATE);
+  fftw_execute(p);
+  fftw_destroy_plan(p);
+
+  //turn into norm
+  for (int i = 0; i < size_fft; i++) {
+    input_fft_norm[i] = std::norm(input_fft[i]);
+    std::cout << input_fft_norm[i] << " ";
+  }
+  std::cout << std::endl;
+
+  //Plot signal
+  double * freq_bins = new double[size_fft];
+  for (int i = 0; i < size_fft; i++) {
+    freq_bins[i] = i;
+  }
+
+  double * time_bins = new double[size];
+  double freq_hz = 2.56E9;
+  for (int i = 0; i < size; i++) {
+    time_bins[i] = i * 1.0 / freq_hz;
+  }
+
+
+  TGraph *input_fft_norm_tgraph = new TGraph (size_fft,&freq_bins[0], &input_fft_norm[0]);
+  TCanvas *c1 = new TCanvas("c1","c1",500,500,600,400);
+  c1->cd();
+  input_fft_norm_tgraph -> Draw();
+
+  //carry out filter
+  double filter[] = {0, 0.0475, 0, -0.0938, 0, 0.3046, 0.4832, 0.3046, 0, -0.0938, 0, 0.0475, 0};
+  double * output = lowPassFilterFIR(input, filter, size, 13);
+
+  //FFT filtered signal
+  std::complex<double> * output_fft = new std::complex<double>[size_fft];
+  double * output_fft_norm = new double[size_fft];
+
+  p = fftw_plan_dft_r2c_1d(size, &output[0] , reinterpret_cast<fftw_complex*>(&output_fft[0]) , FFTW_ESTIMATE);
+  fftw_execute(p);
+  fftw_destroy_plan(p);
+
+  //print filtered signal
+  for (int i = 0; i < size_fft; i++) {
+    output_fft_norm[i] = std::norm(output_fft[i]);
+    std::cout << output_fft_norm[i] << " ";
+  }
+
+  //plot filtered signal
+  TGraph *output_fft_norm_tgraph = new TGraph (size_fft,&freq_bins[0], &output_fft_norm[0]);
+  TCanvas *c2 = new TCanvas("c2","c2",500,500,600,400);
+  c2->cd();
+  output_fft_norm_tgraph -> Draw();
+
+}
+
+
 void visualiseTrigger(int argc, char **argv, double theta, double phi, int L1_threshold, int L2_threshold, int signal_size, double snr, double sample_rate_hz, int antenna_start) {
   TApplication app("app", &argc, argv); //this allows interactive plots for cmake application
 
@@ -751,10 +848,11 @@ void visualiseTrigger(int argc, char **argv, double theta, double phi, int L1_th
   TCanvas *c_digi = new TCanvas("c_digi","Discrete antenna data",500,500,600,400);
   TMultiGraph *mg = new TMultiGraph();
   //std::cout << "Digitised data:" << "\n";
-  for (std::vector<TGraph>::iterator it=ptrigger->signals_discrete.begin();it!=ptrigger->signals_discrete.end(); ++it) {
+  int skipLines = 16;
+  for (std::vector<TGraph>::iterator it=ptrigger->signals_discrete.begin();it!=ptrigger->signals_discrete.end(); it+=skipLines) {
     TGraph * gr3 = new TGraph(*it);
     gr3->SetTitle(std::to_string(it - ptrigger->signals_discrete.begin()).c_str());
-    gr3->SetLineColor(it - ptrigger->signals_discrete.begin() + 1);
+    //gr3->SetLineColor(round((it - ptrigger->signals_discrete.begin())/skipLines)*2 + 1);
     mg->Add(gr3);
   }
   c_digi->cd();
@@ -901,6 +999,8 @@ void visualiseTrigger(int argc, char **argv, double theta, double phi, int L1_th
   TRootCanvas *rc_L2 = (TRootCanvas *)c_L2->GetCanvasImp();
   rc_L2->Connect("CloseWindow()", "TApplication", gApplication, "Terminate()");
 
+  delete tree;
+
   app.Run();
 
 }  
@@ -912,16 +1012,40 @@ int main(int argc, char **argv) {
 
   
   
-  int l1threshold = 475;
-  int l2threshold = 1672;
+  //Fixed parameter sum, no FIR
+  //int l1threshold = 503;
+  //int l2threshold = 1656; //Only 1E3
+  
+
+  //fixed parameter sum, no FIR, multiplier of 4
+  //int l1threshold = 6264;
+  //int l2threshold = 19722; //2E3 runs
+  //result: 42% at 1.3 SNR
+
+
+  //Fixed parameter sum, FIR, multiplier of 4
+  int l1threshold = 4016;
+  int l2threshold = 18859; //1E4
+  //result: 16% at 1.3 SNR
+
   int repeats;
   float samplingFreqHz = 2.56E9;
   int antenna_start = 88;
   int signal_size = 512;
+  double scaling = 4.0;
+
 
   TApplication app("app", &argc, argv); //interactive plots for reviewing threshold eval. Also needs app.Run() later
-  /*
+
+  
+
+  //testig FIR filter
+  //testFiterFIR();
+  //app.Run();
+
+  
   //L1 threshold evaluation - at least 1E4 iterations; fast
+  /*
   std::vector<nicemc::FTPair> noise_export = signal_gen(gen,0,0, 0., signal_size, true, samplingFreqHz, 0);
   TGraph gr = noise_export.at(1).getTimeDomain();
   gr.SaveAs("exportNoise.csv",".csv");
@@ -930,7 +1054,7 @@ int main(int argc, char **argv) {
   std::cout<< "\n" << "--L1 threshold evaluation--" << "\n";
   repeats = 1E4;
   pueoSim::triggerThreshold * tThresholdL1 = new pueoSim::triggerThreshold(samplingFreqHz, 0);
-  tThresholdL1->setTriggerScaling(1.0);
+  tThresholdL1->setTriggerScaling(scaling);
   for (int r=0; r< repeats ; r++) {
     //replace signal_gen with pueoSim noise, no signal, vector of 16 FTPairs
     tThresholdL1->L1Threshold_addData(signal_gen(gen,0,0, 0., signal_size, true, samplingFreqHz,0));
@@ -938,19 +1062,21 @@ int main(int argc, char **argv) {
       std::cout << "L1 iteration " << r << " done" << "\n";
     }
   }
-  l1threshold = tThresholdL1->L1Threshold_eval();
+  l1threshold = tThresholdL1->L1Threshold_eval(samplingFreqHz);
   std::cout<< "\n\n" << "L1 threshold set to " << l1threshold << "\n";
+  delete tThresholdL1->ptrigger;
   delete tThresholdL1;
 
   app.Run(); //interactive plots for reviewing threshold eval
   */
+  
 
   //L2 threshold evaluation - should be at least 1E4; slow 
-  
+  /*
   std::cout<< "\n" << "--L2 threshold evaluation--" << "\n";
-  repeats = 1E3;
+  repeats = 1E4;
   pueoSim::triggerThreshold * tThresholdL2 = new pueoSim::triggerThreshold(samplingFreqHz,0);
-  tThresholdL2->setTriggerScaling(1.0);
+  tThresholdL2->setTriggerScaling(scaling);
   for (int r=0; r< repeats ; r++) {
     //replace signal_gen with pueoSim noise, no signal, vector of 16 FTPairs
     tThresholdL2->L2Threshold_addData(signal_gen(gen,0,0, .0, signal_size, true, samplingFreqHz,0), l1threshold);
@@ -958,28 +1084,31 @@ int main(int argc, char **argv) {
       std::cout << "L2 iteration " << r << " done" << "\n";
     }
   }
-  l2threshold = tThresholdL2->L2Threshold_eval();
+  l2threshold = tThresholdL2->L2Threshold_eval(samplingFreqHz);
   std::cout<< "\n" << "L2 threshold set to " << l2threshold << "\n";
+  delete tThresholdL2->ptrigger;
   delete tThresholdL2;
   auto stop_L2 = std::chrono::high_resolution_clock::now();
   auto duration_L2 = std::chrono::duration_cast<std::chrono::seconds>(stop_L2 - start);
   std::cout << "Runtime: " << duration_L2.count() << " seconds." << std::endl;
 
   app.Run(); //interactive plots for reviewing threshold eval
-  
+  */
 
   //Do runs of trigger with the evaluated thresholds 
   std::cout<< "\n" << "--Trigger on signals with evaluated threshold--" << "\n";
-  int total_pueo_runs = 100;
+  int total_pueo_runs = 1000;
   double snr = 1.3;
   int L2_triggered_count = 0;
   pueoSim::pueoTrigger * ptrigger = new pueoSim::pueoTrigger(samplingFreqHz, antenna_start);
-  //ptrigger->setScaling(1);
+  ptrigger->setScaling(scaling);
   for(int run = 0; run < total_pueo_runs; run++ ) {
     //replace signal_gen with pueoSim signal+noise,vector of 16 FTPairs
     std::vector<nicemc::FTPair> internally_generated_signal =   signal_gen(gen, 10, 10, snr, signal_size, false, samplingFreqHz, antenna_start); 
     ptrigger->newSignal(internally_generated_signal); //random gen, theta, phi, snr, length, noise_only, samplFreq, first antenna
     ptrigger->digitize(4);
+    ptrigger->firFilter_signal_to_fir();
+    ptrigger->digitize_afterFilter(4);
     ptrigger->l1Trigger(8, 16, l1threshold, 64); //args: step, window, threshold, edge size
     ptrigger->l2Trigger(8, 16, l2threshold, 64); //args: step, window, threshold, edge size
     if (ptrigger->L2_triggered == true) {
@@ -998,8 +1127,9 @@ int main(int argc, char **argv) {
   auto duration_triggers = std::chrono::duration_cast<std::chrono::seconds>(stop_triggers - start);
   std::cout << "Runtime: " << duration_triggers.count() << " seconds." << std::endl;
 
-  visualiseTrigger(argc, argv, 10, 10, l1threshold, l2threshold, signal_size, snr, samplingFreqHz, antenna_start);
   
+  visualiseTrigger(argc, argv, 10, 10, l1threshold, l2threshold, signal_size, snr, samplingFreqHz, antenna_start);
+
   //app.Run(); //interactive plots for reviewing threshold eval
 
   return 0;
