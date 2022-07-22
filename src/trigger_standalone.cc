@@ -1074,7 +1074,7 @@ int main(int argc, char **argv) {
   //L2 threshold evaluation - should be at least 1E4; slow 
   
   std::cout<< "\n" << "--L2 threshold evaluation--" << "\n";
-  repeats = 1E2;
+  repeats = 1E3;
   pueoSim::triggerThreshold * tThresholdL2 = new pueoSim::triggerThreshold(samplingFreqHz,0);
   tThresholdL2->setTriggerScaling(scaling);
   for (int r=0; r< repeats ; r++) {

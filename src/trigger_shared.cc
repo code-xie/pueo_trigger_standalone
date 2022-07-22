@@ -440,10 +440,15 @@ void pueoSim::pueoTrigger::l1Trigger(int step, int window, int threshold, int ma
   int waveform_length = signals_discrete.at(0).GetN();
   int total_shifted[waveform_length]={0};
 
+  std::vector<int> beam = L1_beams.at(i_beam);
+
   //sum signals across antennas after shifting each based on beam definition
   for (int i_ant=0;i_ant<n_ant_L1;i_ant++){
+    TGraph signal_ant = signals_discrete.at(i_ant);
+    int beam_delay = beam.at(i_ant);
+
     for (int samp_pos=0;samp_pos<waveform_length;samp_pos++){
-      total_shifted[samp_pos]+= signals_discrete.at(i_ant).GetPointY(samp_pos-L1_beams.at(i_beam).at(i_ant));
+      total_shifted[samp_pos]+= signal_ant.GetPointY(samp_pos-beam_delay);
       //std::cout<<"here! "<<samp_pos<<", "<<total_shifted[samp_pos]<<std::endl;
 
     }
@@ -484,9 +489,14 @@ void pueoSim::pueoTrigger::l1Trigger(int step, int window, int threshold, int ma
     int waveform_length = signals_discrete.at(0).GetN();
     int total_shifted[waveform_length]={0};
 
+    std::vector<int> beam = L1_beams.at(i_beam);
+
     for (int i_ant=0;i_ant<n_ant_L1;i_ant++){
+      TGraph signal_ant = signals_discrete.at(i_ant+8);
+      int beam_delay = beam.at(i_ant);
+
       for (int samp_pos=0;samp_pos<waveform_length;samp_pos++){
-        total_shifted[samp_pos]+= signals_discrete.at(i_ant+8).GetPointY(samp_pos-L1_beams.at(i_beam).at(i_ant));
+        total_shifted[samp_pos]+= signal_ant.GetPointY(samp_pos-beam_delay);
         //std::cout<<"here! "<<samp_pos<<", "<<total_shifted[samp_pos]<<std::endl;
 
       }
