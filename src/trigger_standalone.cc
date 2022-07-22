@@ -813,14 +813,15 @@ void testFiterFIR() {
 }
 
 
-void visualiseTrigger(int argc, char **argv, double theta, double phi, int L1_threshold, int L2_threshold, int signal_size, double snr, double sample_rate_hz, int antenna_start) {
+void visualiseTrigger(int argc, char **argv, double theta, double phi, int L1_threshold, int L2_threshold, int signal_size, double snr, double sample_rate_hz, int antenna_start, double scaling) {
   TApplication app("app", &argc, argv); //this allows interactive plots for cmake application
 
   std::random_device rd;  // Will be used to obtain a seed for the random number engine
   std::mt19937 gen(rd()); // Standard mersenne_twister_engine seeded with rd()
-
+  
   std::vector<nicemc::FTPair> internally_generated_signal = signal_gen(gen,theta,phi, snr, signal_size, false, sample_rate_hz, antenna_start);
   pueoSim::pueoTrigger * ptrigger = new pueoSim::pueoTrigger(sample_rate_hz, antenna_start);
+  ptrigger->setScaling(scaling);
   ptrigger->newSignal(internally_generated_signal);
   
   std::cout.precision(5);
@@ -1129,7 +1130,7 @@ int main(int argc, char **argv) {
   std::cout << "Runtime: " << duration_triggers.count() << " seconds." << std::endl;
 
   
-  visualiseTrigger(argc, argv, 10, 10, l1threshold, l2threshold, signal_size, snr, samplingFreqHz, antenna_start);
+  visualiseTrigger(argc, argv, 10, 10, l1threshold, l2threshold, signal_size, snr, samplingFreqHz, antenna_start, scaling);
 
   //app.Run(); //interactive plots for reviewing threshold eval
  
