@@ -38,6 +38,7 @@ namespace pueoSim {
 
     static const int n_ant_L1=8;
     static const int n_ant_L2=16;
+    bool visualisationOn = false;
     
     int first_antenna;
     int n_samples;
@@ -53,7 +54,7 @@ namespace pueoSim {
 
 
     std::vector<TGraph> signals;
-    std::vector<std::vector<int>> signals_discrete;
+    std::vector<TGraph> signals_discrete;
     std::vector<TGraph> signals_filtered;
 
     std::vector<std::vector<int>> L1_beams;
