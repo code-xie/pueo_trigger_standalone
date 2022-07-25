@@ -53,7 +53,7 @@ namespace pueoSim {
 
 
     std::vector<TGraph> signals;
-    std::vector<TGraph> signals_discrete;
+    std::vector<std::vector<int>> signals_discrete;
     std::vector<TGraph> signals_filtered;
 
     std::vector<std::vector<int>> L1_beams;

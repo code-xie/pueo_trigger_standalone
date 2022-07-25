@@ -198,14 +198,16 @@ void pueoSim::pueoTrigger::digitize(int bits) {
 
   for (it_ant=signals.begin();it_ant!=signals.end(); ++it_ant) {
 
-    signals_discrete.emplace_back(*it_ant);
-    TGraph *gr_digi = & signals_discrete.back();
+    std::vector<int> gr_digi;
 
     const int n = it_ant->GetN();
 
-    for (int i=0; i<gr_digi->GetN(); i++) {
+    
+    
+
+    for (int i=0; i<n; i++) {
       int digitised_y;
-      double scaled_y = gr_digi->GetPointY(i) * scaling;
+      double scaled_y = it_ant->GetPointY(i) * scaling;
       if (scaled_y > digitise_max) {
         digitised_y = digitise_max;
       } else if (scaled_y < digitise_min) {
@@ -215,9 +217,11 @@ void pueoSim::pueoTrigger::digitize(int bits) {
         //digitised_y = scaled_y;
       }
 
-      gr_digi->SetPointY(i,digitised_y );
+      gr_digi.emplace_back(digitised_y);
     }
+    signals_discrete.emplace_back(gr_digi);
   }
+
 }
 
 void pueoSim::pueoTrigger::digitize_afterFilter(int bits) {
@@ -230,14 +234,13 @@ void pueoSim::pueoTrigger::digitize_afterFilter(int bits) {
 
   for (it_ant=signals_filtered.begin();it_ant!=signals_filtered.end(); ++it_ant) {
 
-    signals_discrete.emplace_back(*it_ant);
-    TGraph *gr_digi = & signals_discrete.back();
+    std::vector<int> gr_digi;
 
     const int n = it_ant->GetN();
 
-    for (int i=0; i<gr_digi->GetN(); i++) {
+    for (int i=0; i<n; i++) {
       int digitised_y;
-      double scaled_y = gr_digi->GetPointY(i) * scaling;
+      double scaled_y = it_ant->GetPointY(i) * scaling;
       if (scaled_y > digitise_max) {
         digitised_y = digitise_max;
       } else if (scaled_y < digitise_min) {
@@ -248,43 +251,44 @@ void pueoSim::pueoTrigger::digitize_afterFilter(int bits) {
         //std::cout << scaled_y << "\t\t" << round(scaled_y) << "\n";
       }
 
-      gr_digi->SetPointY(i,digitised_y );
+      gr_digi.emplace_back(digitised_y);
     }
+    signals_discrete.emplace_back(gr_digi);
   }
 }
 
-void pueoSim::pueoTrigger::firFilter() {
-
-  double filter[] = {0, 0.0475, 0, -0.0938, 0, 0.3046, 0.4832, 0.3046, 0, -0.0938, 0, 0.0475, 0};
-  int filter_size = 13;
-
-  std::vector<TGraph>::iterator it_ant;
-  signals_filtered.clear();
-
-  for (it_ant=signals_discrete.begin();it_ant!=signals_discrete.end(); ++it_ant) {
-    signals_filtered.emplace_back(*it_ant);
-    TGraph *gr_fir = & signals_filtered.back();
-
-    int signal_size = gr_fir->GetN();
-    for (int i=0; i < signal_size; i++) {
-      double  acc = 0;
-      for (int j=0; j < filter_size; j++) {
-        if ((i-j) > -1) {
-            //std::cout << it_ant->GetPointY(i-j) << " ";
-            acc += it_ant->GetPointY(i-j) * filter[j];
-        }
-      }
-      //std::cout << std::endl;
-      gr_fir->SetPointY(i, acc);
-    //std::cout << acc << " ";
-    }
-    //std::cout << std::endl;
-
-  }
-
-  
-
-}
+//void pueoSim::pueoTrigger::firFilter() {
+//
+//  double filter[] = {0, 0.0475, 0, -0.0938, 0, 0.3046, 0.4832, 0.3046, 0, -0.0938, 0, 0.0475, 0};
+//  int filter_size = 13;
+//
+//  std::vector<std::vector<int>>::iterator it_ant;
+//  signals_filtered.clear();
+//
+//  for (it_ant=signals_discrete.begin();it_ant!=signals_discrete.end(); ++it_ant) {
+//    signals_filtered.emplace_back(*it_ant);
+//    std::vector<int> *gr_fir = & signals_filtered.back();
+//
+//    int signal_size = gr_fir->size();
+//    for (int i=0; i < signal_size; i++) {
+//      double  acc = 0;
+//      for (int j=0; j < filter_size; j++) {
+//        if ((i-j) > -1) {
+//            //std::cout << it_ant->GetPointY(i-j) << " ";
+//            acc += it_ant->GetPointY(i-j) * filter[j];
+//        }
+//      }
+//      //std::cout << std::endl;
+//      gr_fir.at(i) = acc;
+//    //std::cout << acc << " ";
+//    }
+//    //std::cout << std::endl;
+//
+//  }
+//
+//  
+//
+//}
 
 void pueoSim::pueoTrigger::firFilter_signal_to_fir() {
 
@@ -437,18 +441,22 @@ void pueoSim::pueoTrigger::l1Trigger(int step, int window, int threshold, int ma
 
   //Do first L1 sector
   for(int i_beam=0; i_beam <  n_beams_L1; i_beam += 1) {
-    int waveform_length = signals_discrete.at(0).GetN();
+    int waveform_length = signals_discrete.at(0).size();
     int total_shifted[waveform_length]={0};
 
     std::vector<int> beam = L1_beams.at(i_beam);
 
     //sum signals across antennas after shifting each based on beam definition
     for (int i_ant=0;i_ant<n_ant_L1;i_ant++){
-      TGraph signal_ant = signals_discrete.at(i_ant);
+      std::vector<int> signal_ant = signals_discrete.at(i_ant);
       int beam_delay = beam.at(i_ant);
 
       for (int samp_pos=0;samp_pos<waveform_length;samp_pos++){
-        total_shifted[samp_pos]+= signal_ant.GetPointY(samp_pos-beam_delay);
+        int pos = samp_pos-beam_delay;
+        if (pos >=0 && pos < 512) {
+          total_shifted[samp_pos]+= signal_ant.at(pos); 
+        }
+        
         //std::cout<<"here! "<<samp_pos<<", "<<total_shifted[samp_pos]<<std::endl;
 
       }
@@ -486,17 +494,20 @@ void pueoSim::pueoTrigger::l1Trigger(int step, int window, int threshold, int ma
 
   //Do second L1 sector
   for(int i_beam=0; i_beam <  n_beams_L1; i_beam += 1) {
-    int waveform_length = signals_discrete.at(0).GetN();
+    int waveform_length = signals_discrete.at(0).size();
     int total_shifted[waveform_length]={0};
 
     std::vector<int> beam = L1_beams.at(i_beam);
 
     for (int i_ant=0;i_ant<n_ant_L1;i_ant++){
-      TGraph signal_ant = signals_discrete.at(i_ant+8);
+      std::vector<int> signal_ant = signals_discrete.at(i_ant+8);
       int beam_delay = beam.at(i_ant);
 
       for (int samp_pos=0;samp_pos<waveform_length;samp_pos++){
-        total_shifted[samp_pos]+= signal_ant.GetPointY(samp_pos-beam_delay);
+        int pos = samp_pos-beam_delay;
+        if (pos >=0 && pos < 512) {
+          total_shifted[samp_pos]+= signal_ant.at(pos); 
+        }
         //std::cout<<"here! "<<samp_pos<<", "<<total_shifted[samp_pos]<<std::endl;
 
       }
@@ -593,18 +604,21 @@ void pueoSim::pueoTrigger::l2Trigger(int step, int window, int threshold, int ma
   L2_triggered = false;
 
   for(int i_beam=0; i_beam <  n_beams_L2; i_beam += 1) {
-    int waveform_length = signals_discrete.at(0).GetN();
+    int waveform_length = signals_discrete.at(0).size();
     int total_shifted[waveform_length]={0};
 
     std::vector<int> beam = L2_beams.at(i_beam);
 
     //sum signals across antennas after shifting each based on beam definition
     for (int i_ant=0;i_ant<n_ant_L2;i_ant++){
-      TGraph * signal_ant = &signals_discrete.at(i_ant);
+      std::vector<int> * signal_ant = &signals_discrete.at(i_ant);
       int beam_delay = beam.at(i_ant);
 
       for (int samp_pos=0;samp_pos<waveform_length;samp_pos++){
-        total_shifted[samp_pos]+= signal_ant->GetPointY(samp_pos-beam_delay);
+        int pos = samp_pos-beam_delay;
+        if (pos >=0 && pos < 512) {
+          total_shifted[samp_pos]+= signal_ant->at(pos); 
+        }
         //std::cout<<"here! "<<samp_pos<<", "<<total_shifted[samp_pos]<<std::endl;
         //std::cout << total_shifted[samp_pos] << " ";
       }
@@ -687,23 +701,24 @@ void pueoSim::triggerThreshold::setTriggerScaling(float multiplier) {
 //note: it's also not a real beam, but this shouldn't matter for our purposes
 void pueoSim::triggerThreshold::L1Threshold_addData(std::vector<nicemc::FTPair> input_signals) {
   ptrigger->newSignal(input_signals);
+  
   ptrigger->digitize(4);
   ptrigger->firFilter_signal_to_fir();
   ptrigger->digitize_afterFilter(4);
 
   
-  int n_samples = ptrigger->signals_discrete.at(0).GetN();
+  int n_samples = ptrigger->signals_discrete.at(0).size();
   int number_ants = 8;  
   int step = 8;
   int window = 16;
   int max_shift = 64;
 
-  int waveform_length = ptrigger->signals_discrete.at(0).GetN();
+  int waveform_length = ptrigger->signals_discrete.at(0).size();
   int total_shifted[waveform_length]={0};
 
   for (int i_ant=0;i_ant<number_ants;i_ant++){
     for (int samp_pos=0;samp_pos<waveform_length;samp_pos++){
-      total_shifted[samp_pos]+= ptrigger->signals_discrete.at(i_ant).GetPointY(samp_pos);
+      total_shifted[samp_pos]+= ptrigger->signals_discrete.at(i_ant).at(samp_pos);
       //std::cout<<"here! "<<samp_pos<<", "<<total_shifted[samp_pos]<<std::endl;
     }
   }
@@ -789,7 +804,7 @@ void  pueoSim::triggerThreshold::L2Threshold_addData(std::vector<nicemc::FTPair>
  
   
 
-  int n_samples = ptrigger->signals_discrete.at(0).GetN();
+  int n_samples = ptrigger->signals_discrete.at(0).size();
   int step = 8;
   int window = 16;
   int max_shift = 64;
@@ -860,7 +875,7 @@ void  pueoSim::triggerThreshold::L2Threshold_addData(std::vector<nicemc::FTPair>
         for (int samp_pos=0; samp_pos < window ; samp_pos +=1){
           int coherent_sum_sample = 0;
           for (int i_ant=0; i_ant<ptrigger->n_ant_L2; i_ant+=1) {
-            coherent_sum_sample += ptrigger->signals_discrete.at(i_ant).GetPointY(wind_pos+samp_pos-ptrigger->L2_beams.at(i_beam).at(i_ant));
+            coherent_sum_sample += ptrigger->signals_discrete.at(i_ant).at(wind_pos+samp_pos-ptrigger->L2_beams.at(i_beam).at(i_ant));
           }
           int coherent_sum_sqr_sample = coherent_sum_sample * coherent_sum_sample;
           coherent_sum += coherent_sum_sqr_sample;

@@ -845,20 +845,20 @@ void visualiseTrigger(int argc, char **argv, double theta, double phi, int L1_th
   //create digitised data
   ptrigger->digitize(4);
 
-  //Plot digitised signals data
-  TCanvas *c_digi = new TCanvas("c_digi","Discrete antenna data",500,500,600,400);
-  TMultiGraph *mg = new TMultiGraph();
-  //std::cout << "Digitised data:" << "\n";
-  int skipLines = 16;
-  for (std::vector<TGraph>::iterator it=ptrigger->signals_discrete.begin();it!=ptrigger->signals_discrete.end(); it+=skipLines) {
-    TGraph * gr3 = new TGraph(*it);
-    gr3->SetTitle(std::to_string(it - ptrigger->signals_discrete.begin()).c_str());
-    //gr3->SetLineColor(round((it - ptrigger->signals_discrete.begin())/skipLines)*2 + 1);
-    mg->Add(gr3);
-  }
-  c_digi->cd();
-  mg->Draw("A pmc plc");
-  c_digi->BuildLegend();
+  ////Plot digitised signals data
+  //TCanvas *c_digi = new TCanvas("c_digi","Discrete antenna data",500,500,600,400);
+  //TMultiGraph *mg = new TMultiGraph();
+  ////std::cout << "Digitised data:" << "\n";
+  //int skipLines = 16;
+  //for (std::vector<std::vector<int>::iterator it=ptrigger->signals_discrete.begin();i//t!=ptrigger->signals_discrete.end(); it+=skipLines) {
+  //  TGraph * gr3 = new TGraph(*it);
+  //  gr3->SetTitle(std::to_string(it - ptrigger->signals_discrete.begin()).c_str());
+  //  //gr3->SetLineColor(round((it - ptrigger->signals_discrete.begin())/skipLines)*2 + 1);
+  //  mg->Add(gr3);
+  //}
+  //c_digi->cd();
+  //mg->Draw("A pmc plc");
+  //c_digi->BuildLegend();
 
 
   //do L1 trigger
@@ -1073,12 +1073,14 @@ int main(int argc, char **argv) {
   
 
   //L2 threshold evaluation - should be at least 1E4; slow 
-  /*
+  
   std::cout<< "\n" << "--L2 threshold evaluation--" << "\n";
   repeats = 1E3;
   pueoSim::triggerThreshold * tThresholdL2 = new pueoSim::triggerThreshold(samplingFreqHz,0);
+  
   tThresholdL2->setTriggerScaling(scaling);
   for (int r=0; r< repeats ; r++) {
+    
     //replace signal_gen with pueoSim noise, no signal, vector of 16 FTPairs
     tThresholdL2->L2Threshold_addData(signal_gen(gen,0,0, .0, signal_size, true, samplingFreqHz,0), l1threshold);
     if (r % (repeats/10) == 0) {
@@ -1094,13 +1096,13 @@ int main(int argc, char **argv) {
   std::cout << "Runtime: " << duration_L2.count() << " seconds." << std::endl;
 
   //app.Run(); //interactive plots for reviewing threshold eval
-  */
-
   
+
+  /*
   //Do runs of trigger with the evaluated thresholds 
   std::cout<< "\n" << "--Trigger on signals with evaluated threshold--" << "\n";
-  int total_pueo_runs = 100;
-  double snr = 2.3;
+  int total_pueo_runs = 300;
+  double snr = 1.3;
   int L2_triggered_count = 0;
   pueoSim::pueoTrigger * ptrigger = new pueoSim::pueoTrigger(samplingFreqHz, antenna_start);
   ptrigger->setScaling(scaling);
@@ -1133,6 +1135,7 @@ int main(int argc, char **argv) {
   visualiseTrigger(argc, argv, 10, 10, l1threshold, l2threshold, signal_size, snr, samplingFreqHz, antenna_start, scaling);
 
   //app.Run(); //interactive plots for reviewing threshold eval
+  */
  
   return 0;
 }
