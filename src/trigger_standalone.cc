@@ -1037,6 +1037,9 @@ int main(int argc, char **argv) {
   float samplingFreqHz = 2.56E9;
   int antenna_start = 88;
   int signal_size = 512;
+  int step = 8;
+  int window = 16;
+  int edge_size = 64;
   double scaling = 4.0;
   bool firFilterYes = false;
 
@@ -1051,20 +1054,20 @@ int main(int argc, char **argv) {
 
   
   //L1 threshold evaluation - at least 1E4 iterations; fast
-  /*
+  
   std::vector<nicemc::FTPair> noise_export = signal_gen(gen,0,0, 0., signal_size, true, samplingFreqHz, 0);
   TGraph gr = noise_export.at(1).getTimeDomain();
   gr.SaveAs("exportNoise.csv",".csv");
 
 
   std::cout<< "\n" << "--L1 threshold evaluation--" << "\n";
-  repeats = 1E4;
+  repeats = 1E3;
   pueoSim::triggerThreshold * tThresholdL1 = new pueoSim::triggerThreshold(samplingFreqHz, 0);
   tThresholdL1->setTriggerScaling(scaling);
   tThresholdL1->setFir(firFilterYes);
   for (int r=0; r< repeats ; r++) {
     //replace signal_gen with pueoSim noise, no signal, vector of 16 FTPairs
-    tThresholdL1->L1Threshold_addData(signal_gen(gen,0,0, 0., signal_size, true, samplingFreqHz,0));
+    tThresholdL1->L1Threshold_addData(step, window, edge_size, signal_gen(gen,0,0, 0., signal_size, true, samplingFreqHz,0));
     if (r % (repeats/10) == 0) {
       std::cout << "L1 iteration " << r << " done" << "\n";
     }
@@ -1073,21 +1076,24 @@ int main(int argc, char **argv) {
   std::cout<< "\n\n" << "L1 threshold set to " << l1threshold << "\n";
   delete tThresholdL1->ptrigger;
   delete tThresholdL1;
+  auto stop_L1 = std::chrono::high_resolution_clock::now();
+  auto duration_L1 = std::chrono::duration_cast<std::chrono::seconds>(stop_L1 - start);
+  std::cout << "Total Runtime: " << duration_L1.count() << " seconds." << std::endl;
 
-  app.Run(); //interactive plots for reviewing threshold eval
-  */
+  //app.Run(); //interactive plots for reviewing threshold eval
+  
   
 
   //L2 threshold evaluation - should be at least 1E4; slow 
-  /*
+  
   std::cout<< "\n" << "--L2 threshold evaluation--" << "\n";
-  repeats = 1E4;
+  repeats = 3E3;
   pueoSim::triggerThreshold * tThresholdL2 = new pueoSim::triggerThreshold(samplingFreqHz,0);
   tThresholdL2->setTriggerScaling(scaling);
   tThresholdL2->setFir(firFilterYes);
   for (int r=0; r< repeats ; r++) {
     //replace signal_gen with pueoSim noise, no signal, vector of 16 FTPairs
-    tThresholdL2->L2Threshold_addData(signal_gen(gen,0,0, .0, signal_size, true, samplingFreqHz,0), l1threshold);
+    tThresholdL2->L2Threshold_addData(step, window, edge_size, signal_gen(gen,0,0, .0, signal_size, true, samplingFreqHz,0), l1threshold);
     if (r % (repeats/10) == 0) {
       std::cout << "L2 iteration " << r << " done" << "\n";
     }
@@ -1098,16 +1104,16 @@ int main(int argc, char **argv) {
   delete tThresholdL2;
   auto stop_L2 = std::chrono::high_resolution_clock::now();
   auto duration_L2 = std::chrono::duration_cast<std::chrono::seconds>(stop_L2 - start);
-  std::cout << "Runtime: " << duration_L2.count() << " seconds." << std::endl;
+  std::cout << "Total Runtime: " << duration_L2.count() << " seconds." << std::endl;
 
-  app.Run(); //interactive plots for reviewing threshold eval
-  */  
+  //app.Run(); //interactive plots for reviewing threshold eval
+  
 
   
   //Do runs of trigger with the evaluated thresholds 
   
   std::cout<< "\n" << "--Trigger on signals with evaluated threshold--" << "\n";
-  int total_pueo_runs = 500;
+  int total_pueo_runs = 100;
   double snr = 1.3;
   int L2_triggered_count = 0;
   pueoSim::pueoTrigger * ptrigger = new pueoSim::pueoTrigger(samplingFreqHz, antenna_start);
@@ -1119,8 +1125,8 @@ int main(int argc, char **argv) {
     ptrigger->digitize(4);
     //ptrigger->firFilter_signal_to_fir();
     //ptrigger->digitize_afterFilter(4);
-    ptrigger->l1Trigger(8, 16, l1threshold, 64); //args: step, window, threshold, edge size
-    ptrigger->l2Trigger(8, 16, l2threshold, 64); //args: step, window, threshold, edge size
+    ptrigger->l1Trigger(step, window, l1threshold, edge_size); //args: step, window, threshold, edge size
+    ptrigger->l2Trigger(step, window, l2threshold, edge_size); //args: step, window, threshold, edge size
     if (ptrigger->L2_triggered == true) {
       //std::cout << "\n" <<"Triggered " << "\n";
       L2_triggered_count++;
@@ -1135,7 +1141,7 @@ int main(int argc, char **argv) {
 
   auto stop_triggers = std::chrono::high_resolution_clock::now();
   auto duration_triggers = std::chrono::duration_cast<std::chrono::seconds>(stop_triggers - start);
-  std::cout << "Runtime: " << duration_triggers.count() << " seconds." << std::endl;
+  std::cout << "Total Runtime: " << duration_triggers.count() << " seconds." << std::endl;
 
   
   visualiseTrigger(argc, argv, 10, 10, l1threshold, l2threshold, signal_size, snr, samplingFreqHz, antenna_start, scaling);
