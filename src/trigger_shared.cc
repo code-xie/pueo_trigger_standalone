@@ -7,6 +7,7 @@
 #include "TF1.h"
 #include "trigger.h"
 
+//initialise trigger, setup beams
 pueoSim::pueoTrigger::pueoTrigger(float samplingFreqHz_input, int antenna_start){
 
   samplingFreqHz = samplingFreqHz_input;
@@ -18,16 +19,14 @@ pueoSim::pueoTrigger::pueoTrigger(float samplingFreqHz_input, int antenna_start)
   get_beamsL2_simpleSeparation(L2_beams);
   n_beams_L2 = L2_beams.size();
 
-  
-
-  //reenable cout
-  std::cout.clear();
-  std::cout.precision(5);
+  ////reenable cout if previously disabled
+  //std::cout.clear();
+  //std::cout.precision(5);
 
   std::cout << "\n" <<"pueoTrigger initialised with " <<  n_beams_L1 << " L1 beams, " <<  n_beams_L2 <<" L2 beams" << "\n";
 }
 
-
+//scaling of signal chain before trigger; important given limited bit digitisation
 void pueoSim::pueoTrigger::setScaling(float multiplier) {
   scaling = multiplier;
 }
@@ -35,12 +34,14 @@ void pueoSim::pueoTrigger::setScaling(float multiplier) {
 
 //Define beams at given intervals of deltaPhi and deltaTheta
 void pueoSim::pueoTrigger::get_beamsL1_simpleSeparation(std::vector<std::vector<int>> &L1_beams) {
+
+  //Read photogrammetry
   gErrorIgnoreLevel = kError; // Suppress warnings as top two lines not read from photogrammetry file
   TTree *tree = new TTree("ntuple","data from csv file");
   tree->ReadFile("../data/pueoPhotogrammetry_220617.csv","An:X(in):Y(in):Z(in):HorizDist(in):AzCenter(deg):AperAz(deg):AperElev(deg):AntSize(in):description/C",',');
   gErrorIgnoreLevel = kPrint;
 
-  double c = 3e8;
+  double c = 299792458;
   float inch_to_m = 0.0254;
   
   Float_t An, X, Y, Z, Az, r;
@@ -52,16 +53,11 @@ void pueoSim::pueoTrigger::get_beamsL1_simpleSeparation(std::vector<std::vector<
   tree->SetBranchAddress("AzCenter(deg)",&Az);
   tree->SetBranchAddress("HorizDist(in)",&r);
 
-  //for (int i = 0, N = tree->GetEntries(); i < N; ++i) {
-  //  tree->GetEntry(i) ;
-  //  std::cout<< r;
-  //  std::cout<< "\n";
-  //}
 
   //Choose beams from at given multiples of azimuthal and elevation angles from the centre of the triggering sector
   //define centre of sector as elevation perpendicular to the payload, and azimuth the average of the two bottom antennas (for L1) and average of the left/right most two bottom antennas (for L2)
 
-  //1. Find centre of sector by taking bottom antennas and average their azimuth (evaluated from cartesian coordinates)
+  //1. Find centre of sector by taking bottom antennas and average their azimuth
   tree->GetEntry(first_antenna+3);
   float azimuth_1 = Az;
   tree->GetEntry((first_antenna +7)%96);
@@ -71,18 +67,19 @@ void pueoSim::pueoTrigger::get_beamsL1_simpleSeparation(std::vector<std::vector<
   float centre_elevation = -10; //positive is defined as above the horizon. The antennas all point down 10 degrees below horizon
 
 
-  //2. Loop through azimuths and elevation angles, then for each antenna,  
+  //2. Loop through azimuths and elevation angles integer numbers of set angles away
   for (float azimuth = centre_azimuth - 40.; azimuth <= centre_azimuth + 40.01; azimuth +=10.) {
       //std::cout << "Azimuth = " << azimuth << "\n";
       
       for (float elevation = centre_elevation - 40.; elevation <= centre_elevation + 40.01; elevation +=2.) {
       //std::cout << "Elevation = " << elevation << "\n";
       
-      
       tree->GetEntry(first_antenna );
       
+      //reference distance of first antenna in the sector
       double x_0 = cos(elevation/180.*M_PI) * (inch_to_m*Z * tan(elevation/180.*M_PI) - inch_to_m*r * cos((azimuth - Az)/180.*M_PI)) ;
       
+      //find integer number of sample delays for all antennas relative to the first antenna, which defines that beam
       std::vector<int> beam;
       for (int antenna = first_antenna; antenna < (first_antenna + 8) ; antenna++) {
         tree->GetEntry((antenna+96) % 96);
@@ -99,17 +96,14 @@ void pueoSim::pueoTrigger::get_beamsL1_simpleSeparation(std::vector<std::vector<
 
 }
 
-//Define beams at given intervals of deltaPhi and deltaTheta
+//Equivalent of L1 beams, but now with L2 that have 16 antennas each. Define beams at given intervals of deltaPhi and deltaTheta
 void pueoSim::pueoTrigger::get_beamsL2_simpleSeparation(std::vector<std::vector<int>> &L2_beams) {
   gErrorIgnoreLevel = kError; // Suppress warnings as top two lines not read from photogrammetry file
   TTree *tree = new TTree("ntuple","data from csv file");
   tree->ReadFile("../data/pueoPhotogrammetry_220617.csv","An:X(in):Y(in):Z(in):HorizDist(in):AzCenter(deg):AperAz(deg):AperElev(deg):AntSize(in):description/C",',');
   gErrorIgnoreLevel = kPrint;
 
-  //TTreeReader myReader("ntuple", tree);
-  //TTreeReaderValue<Float_t> myPx(myReader, "An");
-
-  double c = 3e8;
+  double c = 299792458;
   float inch_to_m = 0.0254;
   
   Float_t An, X, Y, Z, Az, r;
@@ -121,11 +115,6 @@ void pueoSim::pueoTrigger::get_beamsL2_simpleSeparation(std::vector<std::vector<
   tree->SetBranchAddress("AzCenter(deg)",&Az);
   tree->SetBranchAddress("HorizDist(in)",&r);
 
-  //for (int i = 0, N = tree->GetEntries(); i < N; ++i) {
-  //  tree->GetEntry(i) ;
-  //  std::cout<< r;
-  //  std::cout<< "\n";
-  //}
 
   //Choose beams from at given multiples of azimuthal and elevation angles from the centre of the triggering sector
   //define centre of sector as elevation perpendicular to the payload, and azimuth the average of the two bottom antennas (for L1) and average of the left/right most two bottom antennas (for L2)
@@ -140,16 +129,14 @@ void pueoSim::pueoTrigger::get_beamsL2_simpleSeparation(std::vector<std::vector<
   float centre_elevation = -10; //positive is defined as above the horizon. The antennas all point down 10 degrees below horizon
 
 
-  //2. Loop through azimuths and elevation angles, then for each antenna,  
+  //2. Loop through azimuths and elevation angles integer numbers of set angles away  
   for (float azimuth = centre_azimuth - 40.; azimuth <= centre_azimuth + 40.01; azimuth +=5.) {
       //std::cout << "Azimuth = " << azimuth << "\n";
       
       for (float elevation = centre_elevation - 40.; elevation <= centre_elevation + 40.01; elevation +=2.) {
       //std::cout << "Elevation = " << elevation << "\n";
       
-      
       tree->GetEntry(first_antenna );
-      
       double x_0 = cos(elevation/180.*M_PI) * (inch_to_m*Z * tan(elevation/180.*M_PI) - inch_to_m*r * cos((azimuth - Az)/180.*M_PI)) ;
       
       std::vector<int> beam;
@@ -168,10 +155,11 @@ void pueoSim::pueoTrigger::get_beamsL2_simpleSeparation(std::vector<std::vector<
 
 }
 
-
+//Supply trigger with new input data for 1 L2 sector (16 antennas, and reset data associated with previous input.
 void pueoSim::pueoTrigger::newSignal(std::vector<nicemc::FTPair> input_signals) {
   signals.clear();
   signals_discrete.clear();
+  signals_filtered.clear();
   L2_triggered = false;
   L1_max_value.clear();
   L2_max_value.clear();
@@ -188,6 +176,7 @@ void pueoSim::pueoTrigger::newSignal(std::vector<nicemc::FTPair> input_signals) 
   n_samples = signals.at(0).GetN();
 }
 
+//digitize data at antennas to integers represented with given number of bits. Scaling is done beore this. 
 void pueoSim::pueoTrigger::digitize(int bits) {
   int digitise_max = pow(2,bits-1)-1;
   int digitise_min = -1 * digitise_max;
@@ -212,20 +201,18 @@ void pueoSim::pueoTrigger::digitize(int bits) {
         digitised_y = digitise_min;
       } else {
         digitised_y = round(scaled_y);
-        //digitised_y = scaled_y;
       }
-
       gr_digi->SetPointY(i,digitised_y );
     }
   }
 }
 
+//same as digitize, except using the FIR filtered data as input
 void pueoSim::pueoTrigger::digitize_afterFilter(int bits) {
   int digitise_max = pow(2,bits-1)-1;
   int digitise_min = -1 * digitise_max;
 
   std::vector<TGraph>::iterator it_ant;
-  //it_ant=signals.begin();
   signals_discrete.clear();
 
   for (it_ant=signals_filtered.begin();it_ant!=signals_filtered.end(); ++it_ant) {
@@ -253,41 +240,10 @@ void pueoSim::pueoTrigger::digitize_afterFilter(int bits) {
   }
 }
 
-void pueoSim::pueoTrigger::firFilter() {
-
-  double filter[] = {0, 0.0475, 0, -0.0938, 0, 0.3046, 0.4832, 0.3046, 0, -0.0938, 0, 0.0475, 0};
-  int filter_size = 13;
-
-  std::vector<TGraph>::iterator it_ant;
-  signals_filtered.clear();
-
-  for (it_ant=signals_discrete.begin();it_ant!=signals_discrete.end(); ++it_ant) {
-    signals_filtered.emplace_back(*it_ant);
-    TGraph *gr_fir = & signals_filtered.back();
-
-    int signal_size = gr_fir->GetN();
-    for (int i=0; i < signal_size; i++) {
-      double  acc = 0;
-      for (int j=0; j < filter_size; j++) {
-        if ((i-j) > -1) {
-            //std::cout << it_ant->GetPointY(i-j) << " ";
-            acc += it_ant->GetPointY(i-j) * filter[j];
-        }
-      }
-      //std::cout << std::endl;
-      gr_fir->SetPointY(i, acc);
-    //std::cout << acc << " ";
-    }
-    //std::cout << std::endl;
-
-  }
-
-  
-
-}
-
+//apply fir filter on input signals (before digitisation). Goal is to apply low pass filter which would in theory increase SNR, by removing a higher proportional of noise compared to signal.
 void pueoSim::pueoTrigger::firFilter_signal_to_fir() {
 
+  //two low pass filters, the latter has a lower cutoff
   double filter[] = {0, 0.0475, 0, -0.0938, 0, 0.3046, 0.4832, 0.3046, 0, -0.0938, 0, 0.0475, 0};
   //double filter[] =  {0.0467, 0.0849, -0.0647, -0.0821, 0.0441, 0.3157, 0.4479, 0.3157, 0.0441, -0.0821, -0.0647, 0.0849, 0.0467};
   int filter_size = 13;
@@ -295,7 +251,7 @@ void pueoSim::pueoTrigger::firFilter_signal_to_fir() {
   std::vector<TGraph>::iterator it_ant;
   signals_filtered.clear();
 
-  //testing variable
+  //variables for testing the filter
   bool testDone = false;
   double filter_output[512]; 
   double filter_input[512]; 
@@ -328,9 +284,10 @@ void pueoSim::pueoTrigger::firFilter_signal_to_fir() {
         filter_input[i] = it_ant->GetPointY(i);
       }
     }
-    testDone = true;
+    testDone = true; //only check first antenna for testing
   }
 
+  //Visualise input and output in time and freq domains.
   /*
   //plot tests
   int size = 512;
@@ -412,40 +369,40 @@ void pueoSim::pueoTrigger::firFilter_signal_to_fir() {
   std::cout << std::endl;
 
   */
-
-
 }
 
 
-
+//L1 trigger, applies over both L1 sectors of this L2 secctor.
 void pueoSim::pueoTrigger::l1Trigger(int step, int window, int threshold, int max_shift) {
 //window is number of samples in a given coherent sum. Step is how many samples between subsequent windows.
 //threshold is value compared with coherent sum for trigger
 //max_shift accounts for edge effects where samples should not be formed around the start and end of the signal as samples have been shifted.
 
   //initialise max values to all zeros. This is used for visualisation purposes, not required for the simulation itself
-  for(int i_beam=0; i_beam <  n_beams_L1; i_beam += 1) {
-    L1_max_value.at(i_beam) = 0;
+  if (visualisationOn) {
+    for(int i_beam=0; i_beam <  n_beams_L1; i_beam += 1) {
+      L1_max_value.at(i_beam) = 0;
+    }
   }
+  
 
   //initalize all windows to have NOT triggered (set to false):
-  for(int wind_pos=max_shift; wind_pos < n_samples - max_shift-window -16; wind_pos+=step) {
+  for(int wind_pos=max_shift; wind_pos < n_samples - max_shift-window; wind_pos+=step) {
     L1_triggered_windows.push_back(false);
   }
 
-
+  int waveform_length = signals_discrete.at(0).GetN();
 
   //Do first L1 sector
   for(int i_beam=0; i_beam <  n_beams_L1; i_beam += 1) {
-    int waveform_length = signals_discrete.at(0).GetN();
+    
     int total_shifted[waveform_length]={0};
-
-    std::vector<int> beam = L1_beams.at(i_beam);
+    std::vector<int> * beam = &L1_beams.at(i_beam);
 
     //sum signals across antennas after shifting each based on beam definition
     for (int i_ant=0;i_ant<n_ant_L1;i_ant++){
       TGraph * signal_ant = &signals_discrete.at(i_ant);
-      int beam_delay = beam.at(i_ant);
+      int beam_delay = beam->at(i_ant);
 
       for (int samp_pos=0;samp_pos<waveform_length;samp_pos++){
         total_shifted[samp_pos]+= signal_ant->GetPointY(samp_pos-beam_delay);
@@ -460,10 +417,11 @@ void pueoSim::pueoTrigger::l1Trigger(int step, int window, int threshold, int ma
       total_shifted[samp_pos]=val * val;
       //std::cout<<"shifted val is "<<total_shifted[samp_pos]<<std::endl;
     }
-    //Now cycle through windows and record if a winow triggers. Note that as long as any beam triggers, the trigger for that window is set to //true:
+
+    //Now cycle through windows and record if a winow triggers. Note that as long as any beam triggers, the trigger for that window is set to true:
     int window_count = 0;
 
-    for(int wind_pos=max_shift; wind_pos < n_samples - max_shift-window -16; wind_pos+=step) {
+    for(int wind_pos=max_shift; wind_pos < n_samples - max_shift-window; wind_pos+=step) {
       int coherent_sum = 0;
 
       for (int samp_pos=0;samp_pos<window; samp_pos++){
@@ -490,14 +448,13 @@ void pueoSim::pueoTrigger::l1Trigger(int step, int window, int threshold, int ma
 
   //Do second L1 sector
   for(int i_beam=0; i_beam <  n_beams_L1; i_beam += 1) {
-    int waveform_length = signals_discrete.at(0).GetN();
     int total_shifted[waveform_length]={0};
 
-    std::vector<int> beam = L1_beams.at(i_beam);
+    std::vector<int> * beam = &L1_beams.at(i_beam);
 
     for (int i_ant=0;i_ant<n_ant_L1;i_ant++){
       TGraph * signal_ant = &signals_discrete.at(i_ant+8);
-      int beam_delay = beam.at(i_ant);
+      int beam_delay = beam->at(i_ant);
 
       for (int samp_pos=0;samp_pos<waveform_length;samp_pos++){
         total_shifted[samp_pos]+= signal_ant->GetPointY(samp_pos-beam_delay);
@@ -515,7 +472,7 @@ void pueoSim::pueoTrigger::l1Trigger(int step, int window, int threshold, int ma
     //Now cycle through windows and record if a winow triggers. Note that as long as any beam triggers, the trigger for that window is set to //true:
     int window_count = 0;
 
-    for(int wind_pos=max_shift; wind_pos < n_samples - max_shift-window -16; wind_pos+=step) {
+    for(int wind_pos=max_shift; wind_pos < n_samples - max_shift-window; wind_pos+=step) {
       int coherent_sum = 0;
 
       for (int samp_pos=0;samp_pos<window; samp_pos++){
@@ -618,14 +575,14 @@ void pueoSim::pueoTrigger::l2Trigger(int step, int window, int threshold, int ma
 
     //square so that total_shifted has power:
     for (int samp_pos=0;samp_pos<waveform_length;samp_pos++){
-
-      total_shifted[samp_pos]=pow(total_shifted[samp_pos],2);
+      int val = total_shifted[samp_pos];
+      total_shifted[samp_pos]= val * val;
 
     }
 
     //Now cycle through windows and record if a winow triggers. Note that as long as any beam triggers, the trigger for that window is set to true:
     int window_count = 0;
-    for(int wind_pos=max_shift; wind_pos < n_samples - max_shift-window -16; wind_pos+=step) {
+    for(int wind_pos=max_shift; wind_pos < n_samples - max_shift-window; wind_pos+=step) {
       if (L1_triggered_windows.at(window_count) == true) {
         int coherent_sum = 0;
 
@@ -691,14 +648,23 @@ void pueoSim::triggerThreshold::setTriggerScaling(float multiplier) {
   ptrigger->setScaling(multiplier);
 }
 
+void pueoSim::triggerThreshold::setFir(bool firFilterYes) {
+  ptrigger->firFilterOn = firFilterYes;
+}
+
 //note: only 1 beam is generated, as otherwise the data points may not be independent. 
 //note: it's also not a real beam, but this shouldn't matter for our purposes
 void pueoSim::triggerThreshold::L1Threshold_addData(std::vector<nicemc::FTPair> input_signals) {
   ptrigger->newSignal(input_signals);
   ptrigger->digitize(4);
-  ptrigger->firFilter_signal_to_fir();
-  ptrigger->digitize_afterFilter(4);
 
+  if (ptrigger->firFilterOn) {
+    ptrigger->firFilter_signal_to_fir();
+    ptrigger->digitize_afterFilter(4);
+  } else {
+    ptrigger->digitize(4);
+  }
+  
   
   int n_samples = ptrigger->signals_discrete.at(0).GetN();
   int number_ants = 8;  
@@ -789,9 +755,13 @@ int pueoSim::triggerThreshold::L1Threshold_eval(double sample_rate) {
 
 void  pueoSim::triggerThreshold::L2Threshold_addData(std::vector<nicemc::FTPair> input_signals, int L1Threshold) {
   ptrigger->newSignal(input_signals);
-  ptrigger->digitize(4);
-  ptrigger->firFilter_signal_to_fir();
-  ptrigger->digitize_afterFilter(4);
+  
+  if (ptrigger->firFilterOn) {
+    ptrigger->firFilter_signal_to_fir();
+    ptrigger->digitize_afterFilter(4);
+  } else {
+    ptrigger->digitize(4);
+  }
 
   ptrigger->l1Trigger(8, 16, L1Threshold, 64);
  

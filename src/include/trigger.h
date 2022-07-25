@@ -38,7 +38,9 @@ namespace pueoSim {
 
     static const int n_ant_L1=8;
     static const int n_ant_L2=16;
+
     bool visualisationOn = false;
+    bool firFilterOn = false;
     
     int first_antenna;
     int n_samples;
@@ -94,6 +96,8 @@ namespace pueoSim {
         int window_count;
 
         void setTriggerScaling(float multiplier) ;
+        void setFir(bool firFilterYes);
+
         void L1Threshold_addData(std::vector<nicemc::FTPair> input_signals);
         int L1Threshold_eval(double samplingFreqHz);
         void L2Threshold_addData(std::vector<nicemc::FTPair> input_signals, int L1Threshold);

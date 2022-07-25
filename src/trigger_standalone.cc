@@ -548,7 +548,7 @@ std::vector<nicemc::FTPair> signal_gen(std::mt19937& gen, double theta_deg, doub
   double h1 = 0.74; //vertical separation between adjacent antennas for lower 3 antennas in a //phi sector
   double h2 = 3.0; //vertical separation between adjacent antennas between top two antennas in //a given phi sector
   double h = 2 * h1 + h2;
-  double c = 3e8;
+  double c = 299792458;;
   //double delta_t = 1/(sample_rate_hz); //time between samples
 
 
@@ -893,7 +893,7 @@ void visualiseTrigger(int argc, char **argv, double theta, double phi, int L1_th
   double h1 = 0.74; //vertical separation between adjacent antennas for lower 3 antennas in a //phi sector
   double h2 = 3.0; //vertical separation between adjacent antennas between top two antennas in //a given phi sector
   double h = 2 * h1 + h2;
-  double c = 3e8;
+  double c = 299792458;
   //double delta_t = 1/(sample_rate_hz); //time between samples
 
   TCanvas *c_L1 = new TCanvas("L1","L1",0,0,600,400);
@@ -1023,14 +1023,14 @@ int main(int argc, char **argv) {
   
 
   //fixed parameter sum, no FIR, multiplier of 4
-  //int l1threshold = 6264;
-  //int l2threshold = 19722; //2E3 runs
+  int l1threshold = 6264;
+  int l2threshold = 19310; //1E4 runs
   //result: 42% at 1.3 SNR
 
 
   //Fixed parameter sum, FIR, multiplier of 4
-  int l1threshold = 4016;
-  int l2threshold = 18859; //1E4
+  //int l1threshold = 4016;
+  //int l2threshold = 18859; //1E4
   //result: 16% at 1.3 SNR
 
   int repeats;
@@ -1038,6 +1038,7 @@ int main(int argc, char **argv) {
   int antenna_start = 88;
   int signal_size = 512;
   double scaling = 4.0;
+  bool firFilterYes = false;
 
 
   TApplication app("app", &argc, argv); //interactive plots for reviewing threshold eval. Also needs app.Run() later
@@ -1060,6 +1061,7 @@ int main(int argc, char **argv) {
   repeats = 1E4;
   pueoSim::triggerThreshold * tThresholdL1 = new pueoSim::triggerThreshold(samplingFreqHz, 0);
   tThresholdL1->setTriggerScaling(scaling);
+  tThresholdL1->setFir(firFilterYes);
   for (int r=0; r< repeats ; r++) {
     //replace signal_gen with pueoSim noise, no signal, vector of 16 FTPairs
     tThresholdL1->L1Threshold_addData(signal_gen(gen,0,0, 0., signal_size, true, samplingFreqHz,0));
@@ -1077,11 +1079,12 @@ int main(int argc, char **argv) {
   
 
   //L2 threshold evaluation - should be at least 1E4; slow 
-  
+  /*
   std::cout<< "\n" << "--L2 threshold evaluation--" << "\n";
-  repeats = 1E3;
+  repeats = 1E4;
   pueoSim::triggerThreshold * tThresholdL2 = new pueoSim::triggerThreshold(samplingFreqHz,0);
   tThresholdL2->setTriggerScaling(scaling);
+  tThresholdL2->setFir(firFilterYes);
   for (int r=0; r< repeats ; r++) {
     //replace signal_gen with pueoSim noise, no signal, vector of 16 FTPairs
     tThresholdL2->L2Threshold_addData(signal_gen(gen,0,0, .0, signal_size, true, samplingFreqHz,0), l1threshold);
@@ -1097,14 +1100,14 @@ int main(int argc, char **argv) {
   auto duration_L2 = std::chrono::duration_cast<std::chrono::seconds>(stop_L2 - start);
   std::cout << "Runtime: " << duration_L2.count() << " seconds." << std::endl;
 
-  //app.Run(); //interactive plots for reviewing threshold eval
-  
+  app.Run(); //interactive plots for reviewing threshold eval
+  */  
 
   
   //Do runs of trigger with the evaluated thresholds 
-  /*
+  
   std::cout<< "\n" << "--Trigger on signals with evaluated threshold--" << "\n";
-  int total_pueo_runs = 100;
+  int total_pueo_runs = 500;
   double snr = 1.3;
   int L2_triggered_count = 0;
   pueoSim::pueoTrigger * ptrigger = new pueoSim::pueoTrigger(samplingFreqHz, antenna_start);
@@ -1114,8 +1117,8 @@ int main(int argc, char **argv) {
     std::vector<nicemc::FTPair> internally_generated_signal =   signal_gen(gen, 10, 10, snr, signal_size, false, samplingFreqHz, antenna_start); 
     ptrigger->newSignal(internally_generated_signal); //random gen, theta, phi, snr, length, noise_only, samplFreq, first antenna
     ptrigger->digitize(4);
-    ptrigger->firFilter_signal_to_fir();
-    ptrigger->digitize_afterFilter(4);
+    //ptrigger->firFilter_signal_to_fir();
+    //ptrigger->digitize_afterFilter(4);
     ptrigger->l1Trigger(8, 16, l1threshold, 64); //args: step, window, threshold, edge size
     ptrigger->l2Trigger(8, 16, l2threshold, 64); //args: step, window, threshold, edge size
     if (ptrigger->L2_triggered == true) {
@@ -1138,7 +1141,8 @@ int main(int argc, char **argv) {
   visualiseTrigger(argc, argv, 10, 10, l1threshold, l2threshold, signal_size, snr, samplingFreqHz, antenna_start, scaling);
 
   //app.Run(); //interactive plots for reviewing threshold eval
-  */
+  
+
   return 0;
 }
 
