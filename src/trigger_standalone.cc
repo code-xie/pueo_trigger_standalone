@@ -1040,7 +1040,7 @@ int main(int argc, char **argv) {
   int step = 8;
   int window = 16;
   int edge_size = 64;
-  double scaling = 4.0;
+  double scaling = 2.0;
   bool firFilterYes = false;
 
 
@@ -1061,7 +1061,7 @@ int main(int argc, char **argv) {
 
 
   std::cout<< "\n" << "--L1 threshold evaluation--" << "\n";
-  repeats = 1E3;
+  repeats = 1E4;
   pueoSim::triggerThreshold * tThresholdL1 = new pueoSim::triggerThreshold(samplingFreqHz, 0);
   tThresholdL1->setTriggerScaling(scaling);
   tThresholdL1->setFir(firFilterYes);
