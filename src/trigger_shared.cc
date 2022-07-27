@@ -182,27 +182,20 @@ void pueoSim::pueoTrigger::digitize(int bits) {
   int digitise_min = -1 * digitise_max;
 
   std::vector<TGraph>::iterator it_ant;
-  //it_ant=signals.begin();
   signals_discrete.clear();
 
-  for (it_ant=signals.begin();it_ant!=signals.end(); ++it_ant) {
+  for (int i_ant=0; i_ant < n_ant_L2; i_ant++) {
 
-    signals_discrete.emplace_back(*it_ant);
-    TGraph *gr_digi = & signals_discrete.back();
-
-    const int n = it_ant->GetN();
-
-    for (int i=0; i<gr_digi->GetN(); i++) {
+    for (int i=0; i<n_samples; i++) {
       int digitised_y;
-      double scaled_y = gr_digi->GetPointY(i) * scaling;
+      double scaled_y = signals.at(i_ant).GetPointY(i) * scaling;
       if (scaled_y > digitise_max) {
-        digitised_y = digitise_max;
+        signals_discrete.push_back(digitise_max);
       } else if (scaled_y < digitise_min) {
-        digitised_y = digitise_min;
+        signals_discrete.push_back(digitise_min);
       } else {
-        digitised_y = round(scaled_y);
+        signals_discrete.push_back(round(scaled_y));
       }
-      gr_digi->SetPointY(i,digitised_y );
     }
   }
 }
@@ -215,27 +208,18 @@ void pueoSim::pueoTrigger::digitize_afterFilter(int bits) {
   std::vector<TGraph>::iterator it_ant;
   signals_discrete.clear();
 
-  for (it_ant=signals_filtered.begin();it_ant!=signals_filtered.end(); ++it_ant) {
+  for (int i_ant=0; i_ant < n_ant_L2; i_ant++) {
 
-    signals_discrete.emplace_back(*it_ant);
-    TGraph *gr_digi = & signals_discrete.back();
-
-    const int n = it_ant->GetN();
-
-    for (int i=0; i<gr_digi->GetN(); i++) {
+    for (int i=0; i<n_samples; i++) {
       int digitised_y;
-      double scaled_y = gr_digi->GetPointY(i) * scaling;
+      double scaled_y = signals_filtered.at(i_ant).GetPointY(i) * scaling;
       if (scaled_y > digitise_max) {
-        digitised_y = digitise_max;
+        signals_discrete.push_back(digitise_max);
       } else if (scaled_y < digitise_min) {
-        digitised_y = digitise_min;
+        signals_discrete.push_back(digitise_min);
       } else {
-        digitised_y = round(scaled_y);
-        //digitised_y = scaled_y;
-        //std::cout << scaled_y << "\t\t" << round(scaled_y) << "\n";
+        signals_discrete.push_back(round(scaled_y));
       }
-
-      gr_digi->SetPointY(i,digitised_y );
     }
   }
 }
@@ -391,15 +375,6 @@ void pueoSim::pueoTrigger::l1Trigger(int step, int window, int threshold, int ma
     L1_triggered_windows.push_back(false);
   }
 
-  //Convert TGraphs into arrays
-
-  int signals_discrete_vector[n_ant_L2][n_samples];
-  for (int i_ant=0;i_ant<n_ant_L2;i_ant++){
-    for (int i_samp=0;i_samp<n_samples;i_samp++){
-      signals_discrete_vector[i_ant][i_samp] = signals_discrete.at(i_ant).GetPointY(i_samp);
-    }
-  }
-
   //Do first L1 sector
   for(int i_beam=0; i_beam <  n_beams_L1; i_beam += 1) {
     int total_shifted[n_samples]={0};
@@ -409,10 +384,11 @@ void pueoSim::pueoTrigger::l1Trigger(int step, int window, int threshold, int ma
     for (int i_ant=0;i_ant<n_ant_L1;i_ant++){
 
       int beam_delay = beam->at(i_ant);
+      int offset_pos = i_ant * n_samples;
 
       //no need to sum for positions ignored due to edge effect
       for (int samp_pos=max_shift;samp_pos<n_samples-max_shift+1;samp_pos++){
-        total_shifted[samp_pos]+= signals_discrete_vector[i_ant][samp_pos-beam_delay];
+        total_shifted[samp_pos]+= signals_discrete[offset_pos+samp_pos-beam_delay];
       }
     }
 
@@ -455,10 +431,12 @@ void pueoSim::pueoTrigger::l1Trigger(int step, int window, int threshold, int ma
     std::vector<int> * beam = &L1_beams.at(i_beam);
 
     for (int i_ant=8;i_ant<n_ant_L1+8;i_ant++){
+
       int beam_delay = beam->at(i_ant-8);
+      int offset_pos = i_ant * n_samples;
 
       for (int samp_pos=max_shift;samp_pos<n_samples-max_shift+1;samp_pos++){
-        total_shifted[samp_pos]+= signals_discrete_vector[i_ant][samp_pos-beam_delay];
+        total_shifted[samp_pos]+= signals_discrete[offset_pos+samp_pos-beam_delay];
       }
     }
 
@@ -500,19 +478,19 @@ void pueoSim::pueoTrigger::l2Trigger(int step, int window, int threshold, int ma
   for(int i_beam=0; i_beam <  n_beams_L2; i_beam += 1) {
     int total_shifted[n_samples]={0};
 
-    std::vector<int> beam = L2_beams.at(i_beam);
+    std::vector<int> * beam = &L2_beams.at(i_beam);
 
     //sum signals across antennas after shifting each based on beam definition
     for (int i_ant=0;i_ant<n_ant_L2;i_ant++){
-      TGraph * signal_ant = &signals_discrete.at(i_ant);
-      int beam_delay = beam.at(i_ant);
+      
+      int beam_delay = beam->at(i_ant);
+      int offset_pos = i_ant * n_samples;
 
       //no need to sum for positions ignored due to edge effect
       for (int samp_pos=max_shift;samp_pos<n_samples-max_shift+1;samp_pos++){
-        total_shifted[samp_pos]+= signal_ant->GetPointY(samp_pos-beam_delay);
+        total_shifted[samp_pos]+= signals_discrete[offset_pos+samp_pos-beam_delay];
       }
     }
-    //std::cout<< "\n";
 
     //square so that total_shifted has power:
     for (int samp_pos=max_shift;samp_pos<n_samples-max_shift+1;samp_pos++){
@@ -584,11 +562,12 @@ void pueoSim::triggerThreshold::L1Threshold_addData(int step, int window, int ma
     std::vector<int> * beam = &ptrigger->L1_beams.at(i_beam);
 
     for (int i_ant=0;i_ant<number_ants;i_ant++){
-      TGraph * signal_ant = &ptrigger->signals_discrete.at(i_ant);
-      int beam_delay = beam->at(i_ant);
 
+      int beam_delay = beam->at(i_ant);
+      int offset_pos = i_ant * n_samples;
+      
       for (int samp_pos=max_shift;samp_pos< n_samples - max_shift+1;samp_pos++){
-        total_shifted[samp_pos]+= signal_ant->GetPointY(samp_pos-beam_delay);
+        total_shifted[samp_pos]+= ptrigger->signals_discrete[offset_pos+samp_pos-beam_delay];
       }
     }
 
@@ -736,7 +715,7 @@ void  pueoSim::triggerThreshold::L2Threshold_addData(int step, int window, int m
         for (int samp_pos=0; samp_pos < window ; samp_pos +=1){
           int coherent_sum_sample = 0;
           for (int i_ant=0; i_ant<ptrigger->n_ant_L2; i_ant+=1) {
-            coherent_sum_sample += ptrigger->signals_discrete.at(i_ant).GetPointY(wind_pos+samp_pos-ptrigger->L2_beams.at(i_beam).at(i_ant));
+            coherent_sum_sample += ptrigger->signals_discrete[i_ant * n_samples + wind_pos+samp_pos-ptrigger->L2_beams.at(i_beam).at(i_ant)];
           }
           int coherent_sum_sqr_sample = coherent_sum_sample * coherent_sum_sample;
           coherent_sum += coherent_sum_sqr_sample;

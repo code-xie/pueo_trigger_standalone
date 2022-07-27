@@ -853,10 +853,20 @@ void visualiseTrigger(int argc, char **argv, double theta, double phi, int L1_th
   TCanvas *c_digi = new TCanvas("c_digi","Discrete antenna data",500,500,600,400);
   TMultiGraph *mg = new TMultiGraph();
   //std::cout << "Digitised data:" << "\n";
-  int skipLines = 16;
-  for (std::vector<TGraph>::iterator it=ptrigger->signals_discrete.begin();it!=ptrigger->signals_discrete.end(); it+=skipLines) {
-    TGraph * gr3 = new TGraph(*it);
-    gr3->SetTitle(std::to_string(it - ptrigger->signals_discrete.begin()).c_str());
+  int skipLines = 1;
+  for (int i_ant = 0;i_ant < ptrigger->n_ant_L2; i_ant+=skipLines) {
+    
+    std::vector<int>::const_iterator first = (ptrigger->signals_discrete).begin() + i_ant * (ptrigger->n_samples);
+    std::vector<int>::const_iterator last = first + ptrigger->n_samples;
+    std::vector<double> thisAntennaY(first, last);
+
+    std::vector<double> thisAntennaX;
+    for (int j = 0; j< ptrigger->n_samples; j++) {
+      thisAntennaY.push_back(j);
+    }
+    
+    TGraph * gr3 = new TGraph(ptrigger->n_samples, thisAntennaX[0], thisAntennaY[0]);
+    gr3->SetTitle(std::to_string(i_ant).c_str());
     //gr3->SetLineColor(round((it - ptrigger->signals_discrete.begin())/skipLines)*2 + 1);
     mg->Add(gr3);
   }
@@ -1023,8 +1033,8 @@ int main(int argc, char **argv) {
   
 
   //fixed parameter sum, no FIR, multiplier of 4
-  int l1threshold = 6264;
-  int l2threshold = 19310; //1E4 runs
+  //int l1threshold = 6264;
+  //int l2threshold = 19310; //1E4 runs
   //result: 42% at 1.3 SNR
 
 
@@ -1032,6 +1042,9 @@ int main(int argc, char **argv) {
   //int l1threshold = 4016;
   //int l2threshold = 18859; //1E4
   //result: 16% at 1.3 SNR
+
+  int l1threshold = 1900;
+  int l2threshold = 6000; //1E4 runs
 
   int repeats;
   float samplingFreqHz = 2.56E9;
