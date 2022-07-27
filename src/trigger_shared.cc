@@ -391,6 +391,14 @@ void pueoSim::pueoTrigger::l1Trigger(int step, int window, int threshold, int ma
     L1_triggered_windows.push_back(false);
   }
 
+  //Convert TGraphs into arrays
+
+  int signals_discrete_vector[n_ant_L2][n_samples];
+  for (int i_ant=0;i_ant<n_ant_L2;i_ant++){
+    for (int i_samp=0;i_samp<n_samples;i_samp++){
+      signals_discrete_vector[i_ant][i_samp] = signals_discrete.at(i_ant).GetPointY(i_samp);
+    }
+  }
 
   //Do first L1 sector
   for(int i_beam=0; i_beam <  n_beams_L1; i_beam += 1) {
@@ -399,12 +407,12 @@ void pueoSim::pueoTrigger::l1Trigger(int step, int window, int threshold, int ma
 
     //sum signals across antennas after shifting each based on beam definition
     for (int i_ant=0;i_ant<n_ant_L1;i_ant++){
-      TGraph * signal_ant = &signals_discrete.at(i_ant);
+
       int beam_delay = beam->at(i_ant);
 
       //no need to sum for positions ignored due to edge effect
       for (int samp_pos=max_shift;samp_pos<n_samples-max_shift+1;samp_pos++){
-        total_shifted[samp_pos]+= signal_ant->GetPointY(samp_pos-beam_delay);
+        total_shifted[samp_pos]+= signals_discrete_vector[i_ant][samp_pos-beam_delay];
       }
     }
 
@@ -446,12 +454,11 @@ void pueoSim::pueoTrigger::l1Trigger(int step, int window, int threshold, int ma
     int total_shifted[n_samples]={0};
     std::vector<int> * beam = &L1_beams.at(i_beam);
 
-    for (int i_ant=0;i_ant<n_ant_L1;i_ant++){
-      TGraph * signal_ant = &signals_discrete.at(i_ant+8);
-      int beam_delay = beam->at(i_ant);
+    for (int i_ant=8;i_ant<n_ant_L1+8;i_ant++){
+      int beam_delay = beam->at(i_ant-8);
 
       for (int samp_pos=max_shift;samp_pos<n_samples-max_shift+1;samp_pos++){
-        total_shifted[samp_pos]+= signal_ant->GetPointY(samp_pos-beam_delay);
+        total_shifted[samp_pos]+= signals_discrete_vector[i_ant][samp_pos-beam_delay];
       }
     }
 
@@ -572,49 +579,35 @@ void pueoSim::triggerThreshold::L1Threshold_addData(int step, int window, int ma
   int number_ants = ptrigger->n_ant_L1;  
 
   //Similar process as L1 trigger
-  int total_shifted[n_samples]={0};
+  for(int i_beam=0; i_beam < ptrigger->n_beams_L1; i_beam += 1) {
+    int total_shifted[n_samples]={0};
+    std::vector<int> * beam = &ptrigger->L1_beams.at(i_beam);
 
-  for (int i_ant=0;i_ant<number_ants;i_ant++){
+    for (int i_ant=0;i_ant<number_ants;i_ant++){
+      TGraph * signal_ant = &ptrigger->signals_discrete.at(i_ant);
+      int beam_delay = beam->at(i_ant);
+
+      for (int samp_pos=max_shift;samp_pos< n_samples - max_shift+1;samp_pos++){
+        total_shifted[samp_pos]+= signal_ant->GetPointY(samp_pos-beam_delay);
+      }
+    }
+
+    //square so that total_shifted has power:
     for (int samp_pos=max_shift;samp_pos< n_samples - max_shift+1;samp_pos++){
-      total_shifted[samp_pos]+= ptrigger->signals_discrete.at(i_ant).GetPointY(samp_pos);
-      //std::cout<<"here! "<<samp_pos<<", "<<total_shifted[samp_pos]<<std::endl;
+      int val = total_shifted[samp_pos];
+      total_shifted[samp_pos]= val * val;
+    }
+
+    
+    for(int wind_pos=max_shift; wind_pos < n_samples - max_shift-window; wind_pos+=step) {
+      int coherent_sum = 0;
+      for (int samp_pos=0;samp_pos<window; samp_pos++){
+        coherent_sum+=total_shifted[wind_pos+samp_pos];
+      }
+      coherent_values.push_back(coherent_sum);
+      window_count++;
     }
   }
-
-  //square so that total_shifted has power:
-  for (int samp_pos=max_shift;samp_pos< n_samples - max_shift+1;samp_pos++){
-    int val = total_shifted[samp_pos];
-    total_shifted[samp_pos]= val * val;
-  }
-
-  //
-  for(int wind_pos=max_shift; wind_pos < n_samples - max_shift-window; wind_pos+=step) {
-    int coherent_sum = 0;
-    for (int samp_pos=0;samp_pos<window; samp_pos++){
-      coherent_sum+=total_shifted[wind_pos+samp_pos];
-    }
-    coherent_values.push_back(coherent_sum);
-    window_count++;
-  }
-
-
-  //old way
-  //for(int wind_pos=max_shift; wind_pos < n_samples - max_shift-window -16; wind_pos+=step) {
-  //  int coherent_sum = 0;
-  //  for (int samp_pos=0; samp_pos < window ; samp_pos +=1){
-  //    int coherent_sum_sample = 0;
-  //    for (int i_ant=0; i_ant<number_ants; i_ant+=1) {
-  //      coherent_sum_sample += ptrigger->signals_discrete.at(i_ant).GetPointY(wind_pos+samp_pos);
-  //    }
-  //    int coherent_sum_sqr_sample = coherent_sum_sample * coherent_sum_sample;
-  //    coherent_sum += coherent_sum_sqr_sample;
-  //  }
-  //  
-  //  
-  //  coherent_values.push_back(coherent_sum);
-  //  window_count++;
-  //}
-
 }
 
 int pueoSim::triggerThreshold::L1Threshold_eval(double sample_rate) {  
@@ -625,10 +618,14 @@ int pueoSim::triggerThreshold::L1Threshold_eval(double sample_rate) {
   std::cout << "\nCount = " << size << ", STDeV = " << stdev << ", Mean = " << mean << "\n\n";
 
 
+  //parameters for fitting histogram
+  int num_bins = 100;
+  double hist_max =  10 * stdev + mean;
+
   TCanvas *g1 = new TCanvas("g1","g1",500,500,600,400);
   g1->cd();
 
-  TH1D * h1 = new TH1D("Histogram for L1","Histogram for L1",100,0.,8 * stdev + mean);
+  TH1D * h1 = new TH1D("Histogram for L1","Histogram for L1",num_bins,0.,hist_max);
   for (int i = 0; i < coherent_values.size(); i++) {
     h1->Fill(coherent_values.at(i));
   }
@@ -637,7 +634,7 @@ int pueoSim::triggerThreshold::L1Threshold_eval(double sample_rate) {
 
   TF1 * f1 = new TF1("f1","expo");
   f1->SetParameters(1,1);
-  h1->Fit("f1","","", mean + 3 * stdev, mean + 7 * stdev);
+  h1->Fit("f1","","", mean + 6 * stdev, mean + 8 * stdev);
   TF1 * fitFunc = h1->GetFunction("f1");
   //std::cout << "p0=" << fitFunc->GetParameter(0) << " p1=" << fitFunc->GetParameter(1) ;
   
@@ -649,7 +646,7 @@ int pueoSim::triggerThreshold::L1Threshold_eval(double sample_rate) {
 
 
   
-  return round((std::log(sector_rate * step / sample_rate / ptrigger->n_beams_L1 *  window_count * (1 - exp((8 * stdev + mean)/100 *  fitFunc->GetParameter(1)))) - fitFunc->GetParameter(0) ) / fitFunc->GetParameter(1));
+  return round((std::log(sector_rate * step / sample_rate / ptrigger->n_beams_L1 *  window_count * (1 - exp((8 * stdev + mean)/100 *  fitFunc->GetParameter(1)))) - fitFunc->GetParameter(0) ) / fitFunc->GetParameter(1) - hist_max/num_bins/2);
 
 }
 
@@ -672,14 +669,16 @@ void  pueoSim::triggerThreshold::L2Threshold_addData(int step, int window, int m
 
 
 // pre-shift approach has issue since we want to keep track of largest coherent value at the window, across beams. Needs array of coherent sum maxes
-  int num_windows = 0;
-  for(int wind_pos=max_shift; wind_pos < n_samples - max_shift-window; wind_pos+=step) {
-    num_windows++;
-  }
+  
   int window_count_this_signal = 0;
 
 /*
   //new way - about half the speed of old way due to nature of calculation
+  int num_windows = 0;
+  for(int wind_pos=max_shift; wind_pos < n_samples - max_shift-window; wind_pos+=step) {
+    num_windows++;
+  }
+
   int coherent_sum_max[num_windows] = {0};
   for(int i_beam=0; i_beam <  ptrigger->n_beams_L2; i_beam += 1) {
     int waveform_length = ptrigger->signals_discrete.at(0).GetN();
@@ -755,8 +754,10 @@ void  pueoSim::triggerThreshold::L2Threshold_addData(int step, int window, int m
 //*/
 }
 
-int  pueoSim::triggerThreshold::L2Threshold_eval(double sample_rate) {  
+int  pueoSim::triggerThreshold::L2Threshold_eval(double sample_rate, int step) { 
+//Evaluate the distribution of coherent values for windows that have passed L1threshold; specifically, the max coherent value across beams as this is what determines whether that window triggers the L2 sector
 
+  //print basic information about coherent values
   double stdev =  TMath::StdDev(coherent_values.begin(), coherent_values.end() );
   double mean =  TMath::Mean(coherent_values.begin(), coherent_values.end() );
   double size =  coherent_values.size();
@@ -765,21 +766,26 @@ int  pueoSim::triggerThreshold::L2Threshold_eval(double sample_rate) {
   TCanvas *g2 = new TCanvas("g2","g2",500,500,600,400);
   g2->cd();
 
+  //parameters for fitting histogram
+  int num_bins = 100;
+  double hist_max =  8 * stdev + mean;
 
-  TH1D * h1 = new TH1D("Histogram for L2","Histogram for L2",100,0.,8 * stdev + mean);
+  //create histogram and fit straight line to log
+  TH1D * h1 = new TH1D("Histogram for L2","Histogram for L2",num_bins,0.,hist_max);
   for (int i = 0; i < coherent_values.size(); i++) {
     h1->Fill(coherent_values.at(i));
   }
 
   TF1 * f1 = new TF1("f1","expo");
   f1->SetParameters(1,1);
-  h1->Fit("f1","","", mean + 1 * stdev, mean + 6 * stdev);
+  h1->Fit("f1","","", mean + 2 * stdev, mean + 5 * stdev);
   TF1 * fitFunc = h1->GetFunction("f1");
   //std::cout << "p0=" << fitFunc->GetParameter(0) << " p1=" << fitFunc->GetParameter(1) ;
 
+  //
   double sector_rate = 12;
-  double step = 8;
-  int l2threshold = round((std::log(sector_rate * step / sample_rate *  window_count * (1 - exp((8 * stdev + mean)/100 *  fitFunc->GetParameter(1))) ) - fitFunc->GetParameter(0) ) / fitFunc->GetParameter(1));
+  double step_double = step;
+  int l2threshold = round((std::log(sector_rate * step_double / sample_rate *  window_count * (1 - exp(hist_max/num_bins *  fitFunc->GetParameter(1))) ) - fitFunc->GetParameter(0) ) / fitFunc->GetParameter(1) - hist_max/num_bins/2);
   //std::cout<< "\n" << "L2 threshold " << l2threshold << "\n";
 
   h1->Draw();

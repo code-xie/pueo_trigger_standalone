@@ -1053,7 +1053,7 @@ int main(int argc, char **argv) {
   //app.Run();
 
   
-  //L1 threshold evaluation - at least 1E4 iterations; fast
+  //L1 threshold evaluation - at least 5E3 iterations; fast
   
   std::vector<nicemc::FTPair> noise_export = signal_gen(gen,0,0, 0., signal_size, true, samplingFreqHz, 0);
   TGraph gr = noise_export.at(1).getTimeDomain();
@@ -1061,7 +1061,7 @@ int main(int argc, char **argv) {
 
 
   std::cout<< "\n" << "--L1 threshold evaluation--" << "\n";
-  repeats = 1E4;
+  repeats = 1E3;
   pueoSim::triggerThreshold * tThresholdL1 = new pueoSim::triggerThreshold(samplingFreqHz, 0);
   tThresholdL1->setTriggerScaling(scaling);
   tThresholdL1->setFir(firFilterYes);
@@ -1084,10 +1084,10 @@ int main(int argc, char **argv) {
   
   
 
-  //L2 threshold evaluation - should be at least 1E4; slow 
+  //L2 threshold evaluation - should be at least 5E4; slow 
   
   std::cout<< "\n" << "--L2 threshold evaluation--" << "\n";
-  repeats = 3E3;
+  repeats = 1E4;
   pueoSim::triggerThreshold * tThresholdL2 = new pueoSim::triggerThreshold(samplingFreqHz,0);
   tThresholdL2->setTriggerScaling(scaling);
   tThresholdL2->setFir(firFilterYes);
@@ -1098,7 +1098,7 @@ int main(int argc, char **argv) {
       std::cout << "L2 iteration " << r << " done" << "\n";
     }
   }
-  l2threshold = tThresholdL2->L2Threshold_eval(samplingFreqHz);
+  l2threshold = tThresholdL2->L2Threshold_eval(samplingFreqHz, step);
   std::cout<< "\n" << "L2 threshold set to " << l2threshold << "\n";
   delete tThresholdL2->ptrigger;
   delete tThresholdL2;

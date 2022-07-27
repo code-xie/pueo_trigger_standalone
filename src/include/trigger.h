@@ -101,7 +101,7 @@ namespace pueoSim {
         void L1Threshold_addData(int step, int window, int max_shift, std::vector<nicemc::FTPair> input_signals);
         int L1Threshold_eval(double samplingFreqHz);
         void L2Threshold_addData(int step, int window, int max_shift, std::vector<nicemc::FTPair> input_signals, int L1Threshold);
-        int L2Threshold_eval(double samplingFreqHz);
+        int L2Threshold_eval(double samplingFreqHz, int step);
   };
 
   
