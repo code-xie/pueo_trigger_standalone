@@ -34,7 +34,7 @@ namespace pueoSim {
 
   class pueoTrigger {
   public:
-    pueoTrigger(float samplingFreqHz_input, int antenna_start);
+    pueoTrigger(float samplingFreqHz_input, int antenna_start, float theta_width_L1, float phi_width_L1, float theta_width_L2, float phi_width_L2);
 
     static const int n_ant_L1=8;
     static const int n_ant_L2=16;
@@ -56,9 +56,8 @@ namespace pueoSim {
 
 
     std::vector<TGraph> signals;
+    std::vector<TGraph> signals_discrete;
     std::vector<TGraph> signals_filtered;
-
-    std::vector<int> signals_discrete;
 
     std::vector<std::vector<int>> L1_beams;
     std::vector<std::vector<int>> L2_beams;
@@ -67,8 +66,8 @@ namespace pueoSim {
 
 
     void setScaling(float multiplier);
-    void get_beamsL1_simpleSeparation(std::vector<std::vector<int>> &L1_beams);
-    void get_beamsL2_simpleSeparation(std::vector<std::vector<int>> &L2_beams);
+    void get_beamsL1_simpleSeparation(std::vector<std::vector<int>> &L1_beams, float theta_width_L1, float phi_width_L1);
+    void get_beamsL2_simpleSeparation(std::vector<std::vector<int>> &L2_beams, float theta_width_L2, float phi_width_L2);
     void newSignal(std::vector<nicemc::FTPair> input_signals);
     void digitize(int bits);
     void digitize_afterFilter(int bits);
@@ -89,7 +88,7 @@ namespace pueoSim {
 
   class triggerThreshold {
     public:
-        triggerThreshold(float samplingFreqHz_input, int antenna_start);
+        triggerThreshold(float samplingFreqHz_input, int antenna_start, float theta_width_L1, float phi_width_L1, float theta_width_L2, float phi_width_L2);
 
 
         pueoTrigger * ptrigger;
@@ -99,10 +98,10 @@ namespace pueoSim {
         void setTriggerScaling(float multiplier) ;
         void setFir(bool firFilterYes);
 
-        void L1Threshold_addData(int step, int window, int max_shift, std::vector<nicemc::FTPair> input_signals);
-        int L1Threshold_eval(double samplingFreqHz);
-        void L2Threshold_addData(int step, int window, int max_shift, std::vector<nicemc::FTPair> input_signals, int L1Threshold);
-        int L2Threshold_eval(double samplingFreqHz, int step);
+        void L1Threshold_addData(int step, int window, int max_shift, int digitize_bits, std::vector<nicemc::FTPair> input_signals);
+        int L1Threshold_eval(double samplingFreqHz, bool diagnosticOn);
+        void L2Threshold_addData(int step, int window, int max_shift, int digitize_bits, std::vector<nicemc::FTPair> input_signals, int L1Threshold);
+        int L2Threshold_eval(double samplingFreqHz, int step, bool diagnosticOn);
   };
 
   

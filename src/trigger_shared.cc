@@ -8,15 +8,15 @@
 #include "trigger.h"
 
 //initialise trigger, setup beams
-pueoSim::pueoTrigger::pueoTrigger(float samplingFreqHz_input, int antenna_start){
+pueoSim::pueoTrigger::pueoTrigger(float samplingFreqHz_input, int antenna_start, float theta_width_L1, float phi_width_L1, float theta_width_L2, float phi_width_L2){
 
   samplingFreqHz = samplingFreqHz_input;
   first_antenna = (antenna_start+96)%96;
 
-  get_beamsL1_simpleSeparation(L1_beams);
+  get_beamsL1_simpleSeparation(L1_beams, theta_width_L1, phi_width_L1);
   n_beams_L1 = L1_beams.size();
 
-  get_beamsL2_simpleSeparation(L2_beams);
+  get_beamsL2_simpleSeparation(L2_beams, theta_width_L2, phi_width_L2);
   n_beams_L2 = L2_beams.size();
 
   ////reenable cout if previously disabled
@@ -33,7 +33,7 @@ void pueoSim::pueoTrigger::setScaling(float multiplier) {
 
 
 //Define beams at given intervals of deltaPhi and deltaTheta
-void pueoSim::pueoTrigger::get_beamsL1_simpleSeparation(std::vector<std::vector<int>> &L1_beams) {
+void pueoSim::pueoTrigger::get_beamsL1_simpleSeparation(std::vector<std::vector<int>> &L1_beams, float theta_width_L1, float phi_width_L1) {
 
   //Read photogrammetry
   gErrorIgnoreLevel = kError; // Suppress warnings as top two lines not read from photogrammetry file
@@ -66,12 +66,13 @@ void pueoSim::pueoTrigger::get_beamsL1_simpleSeparation(std::vector<std::vector<
   //std::cout << "Centre of sector azimuth = " << centre_azimuth << "\n";
   float centre_elevation = -10; //positive is defined as above the horizon. The antennas all point down 10 degrees below horizon
 
+  float max_angle = 40.0;
 
   //2. Loop through azimuths and elevation angles integer numbers of set angles away
-  for (float azimuth = centre_azimuth - 40.; azimuth <= centre_azimuth + 40.01; azimuth +=10.) {
+  for (float azimuth = centre_azimuth - phi_width_L1 * std::floor(max_angle / phi_width_L1); azimuth <= centre_azimuth + phi_width_L1 * std::floor(max_angle / phi_width_L1) + 0.1; azimuth += phi_width_L1) {
       //std::cout << "Azimuth = " << azimuth << "\n";
       
-      for (float elevation = centre_elevation - 40.; elevation <= centre_elevation + 40.01; elevation +=2.) {
+      for (float elevation = centre_elevation - theta_width_L1 * std::floor(max_angle / theta_width_L1); elevation <= centre_elevation + theta_width_L1 * std::floor(max_angle / theta_width_L1) + 0.1; elevation += theta_width_L1) {
       //std::cout << "Elevation = " << elevation << "\n";
       
       tree->GetEntry(first_antenna );
@@ -94,10 +95,12 @@ void pueoSim::pueoTrigger::get_beamsL1_simpleSeparation(std::vector<std::vector<
     //std::cout << "\n";
   }
 
+  delete tree;
+
 }
 
 //Equivalent of L1 beams, but now with L2 that have 16 antennas each. Define beams at given intervals of deltaPhi and deltaTheta
-void pueoSim::pueoTrigger::get_beamsL2_simpleSeparation(std::vector<std::vector<int>> &L2_beams) {
+void pueoSim::pueoTrigger::get_beamsL2_simpleSeparation(std::vector<std::vector<int>> &L2_beams, float theta_width_L2, float phi_width_L2) {
   gErrorIgnoreLevel = kError; // Suppress warnings as top two lines not read from photogrammetry file
   TTree *tree = new TTree("ntuple","data from csv file");
   tree->ReadFile("../data/pueoPhotogrammetry_220617.csv","An:X(in):Y(in):Z(in):HorizDist(in):AzCenter(deg):AperAz(deg):AperElev(deg):AntSize(in):description/C",',');
@@ -128,12 +131,13 @@ void pueoSim::pueoTrigger::get_beamsL2_simpleSeparation(std::vector<std::vector<
   //std::cout << "Centre of sector azimuth = " << centre_azimuth << "\n";
   float centre_elevation = -10; //positive is defined as above the horizon. The antennas all point down 10 degrees below horizon
 
+  float max_angle = 40.0;
 
   //2. Loop through azimuths and elevation angles integer numbers of set angles away  
-  for (float azimuth = centre_azimuth - 40.; azimuth <= centre_azimuth + 40.01; azimuth +=5.) {
+  for (float azimuth = centre_azimuth - phi_width_L2 * std::floor(max_angle / phi_width_L2); azimuth <= centre_azimuth + phi_width_L2 * std::floor(max_angle / phi_width_L2) + 0.1; azimuth += phi_width_L2) {
       //std::cout << "Azimuth = " << azimuth << "\n";
       
-      for (float elevation = centre_elevation - 40.; elevation <= centre_elevation + 40.01; elevation +=2.) {
+      for (float elevation = centre_elevation - theta_width_L2 * std::floor(max_angle / theta_width_L2); elevation <= centre_elevation + theta_width_L2 * std::floor(max_angle / theta_width_L2) + 0.1; elevation += theta_width_L2) {
       //std::cout << "Elevation = " << elevation << "\n";
       
       tree->GetEntry(first_antenna );
@@ -152,6 +156,8 @@ void pueoSim::pueoTrigger::get_beamsL2_simpleSeparation(std::vector<std::vector<
     }
     //std::cout << "\n";
   }
+
+  delete tree;
 
 }
 
@@ -182,20 +188,27 @@ void pueoSim::pueoTrigger::digitize(int bits) {
   int digitise_min = -1 * digitise_max;
 
   std::vector<TGraph>::iterator it_ant;
+  //it_ant=signals.begin();
   signals_discrete.clear();
 
-  for (int i_ant=0; i_ant < n_ant_L2; i_ant++) {
+  for (it_ant=signals.begin();it_ant!=signals.end(); ++it_ant) {
 
-    for (int i=0; i<n_samples; i++) {
+    signals_discrete.emplace_back(*it_ant);
+    TGraph *gr_digi = & signals_discrete.back();
+
+    const int n = it_ant->GetN();
+
+    for (int i=0; i<gr_digi->GetN(); i++) {
       int digitised_y;
-      double scaled_y = signals.at(i_ant).GetPointY(i) * scaling;
+      double scaled_y = gr_digi->GetPointY(i) * scaling;
       if (scaled_y > digitise_max) {
-        signals_discrete.push_back(digitise_max);
+        digitised_y = digitise_max;
       } else if (scaled_y < digitise_min) {
-        signals_discrete.push_back(digitise_min);
+        digitised_y = digitise_min;
       } else {
-        signals_discrete.push_back(round(scaled_y));
+        digitised_y = round(scaled_y);
       }
+      gr_digi->SetPointY(i,digitised_y );
     }
   }
 }
@@ -208,18 +221,27 @@ void pueoSim::pueoTrigger::digitize_afterFilter(int bits) {
   std::vector<TGraph>::iterator it_ant;
   signals_discrete.clear();
 
-  for (int i_ant=0; i_ant < n_ant_L2; i_ant++) {
+  for (it_ant=signals_filtered.begin();it_ant!=signals_filtered.end(); ++it_ant) {
 
-    for (int i=0; i<n_samples; i++) {
+    signals_discrete.emplace_back(*it_ant);
+    TGraph *gr_digi = & signals_discrete.back();
+
+    const int n = it_ant->GetN();
+
+    for (int i=0; i<gr_digi->GetN(); i++) {
       int digitised_y;
-      double scaled_y = signals_filtered.at(i_ant).GetPointY(i) * scaling;
+      double scaled_y = gr_digi->GetPointY(i) * scaling;
       if (scaled_y > digitise_max) {
-        signals_discrete.push_back(digitise_max);
+        digitised_y = digitise_max;
       } else if (scaled_y < digitise_min) {
-        signals_discrete.push_back(digitise_min);
+        digitised_y = digitise_min;
       } else {
-        signals_discrete.push_back(round(scaled_y));
+        digitised_y = round(scaled_y);
+        //digitised_y = scaled_y;
+        //std::cout << scaled_y << "\t\t" << round(scaled_y) << "\n";
       }
+
+      gr_digi->SetPointY(i,digitised_y );
     }
   }
 }
@@ -375,6 +397,15 @@ void pueoSim::pueoTrigger::l1Trigger(int step, int window, int threshold, int ma
     L1_triggered_windows.push_back(false);
   }
 
+  //Convert TGraphs into arrays
+  //Tried using vectors already at digitize step - however this ran slower than this extra step. Could be worth trying to reimplement as arrays in the future. 
+  int signals_discrete_vector[n_ant_L2][n_samples];
+  for (int i_ant=0;i_ant<n_ant_L2;i_ant++){
+    for (int i_samp=0;i_samp<n_samples;i_samp++){
+      signals_discrete_vector[i_ant][i_samp] = signals_discrete.at(i_ant).GetPointY(i_samp);
+    }
+  }
+
   //Do first L1 sector
   for(int i_beam=0; i_beam <  n_beams_L1; i_beam += 1) {
     int total_shifted[n_samples]={0};
@@ -382,13 +413,11 @@ void pueoSim::pueoTrigger::l1Trigger(int step, int window, int threshold, int ma
 
     //sum signals across antennas after shifting each based on beam definition
     for (int i_ant=0;i_ant<n_ant_L1;i_ant++){
-
       int beam_delay = beam->at(i_ant);
-      int offset_pos = i_ant * n_samples;
 
       //no need to sum for positions ignored due to edge effect
       for (int samp_pos=max_shift;samp_pos<n_samples-max_shift+1;samp_pos++){
-        total_shifted[samp_pos]+= signals_discrete[offset_pos+samp_pos-beam_delay];
+        total_shifted[samp_pos]+= signals_discrete_vector[i_ant][samp_pos-beam_delay];
       }
     }
 
@@ -431,12 +460,10 @@ void pueoSim::pueoTrigger::l1Trigger(int step, int window, int threshold, int ma
     std::vector<int> * beam = &L1_beams.at(i_beam);
 
     for (int i_ant=8;i_ant<n_ant_L1+8;i_ant++){
-
       int beam_delay = beam->at(i_ant-8);
-      int offset_pos = i_ant * n_samples;
 
       for (int samp_pos=max_shift;samp_pos<n_samples-max_shift+1;samp_pos++){
-        total_shifted[samp_pos]+= signals_discrete[offset_pos+samp_pos-beam_delay];
+        total_shifted[samp_pos]+= signals_discrete_vector[i_ant][samp_pos-beam_delay];
       }
     }
 
@@ -475,22 +502,30 @@ void pueoSim::pueoTrigger::l2Trigger(int step, int window, int threshold, int ma
 
   L2_triggered = false;
 
+  //Convert TGraphs into arrays
+
+  int signals_discrete_vector[n_ant_L2][n_samples];
+  for (int i_ant=0;i_ant<n_ant_L2;i_ant++){
+    for (int i_samp=0;i_samp<n_samples;i_samp++){
+      signals_discrete_vector[i_ant][i_samp] = signals_discrete.at(i_ant).GetPointY(i_samp);
+    }
+  }
+
+
   for(int i_beam=0; i_beam <  n_beams_L2; i_beam += 1) {
     int total_shifted[n_samples]={0};
-
-    std::vector<int> * beam = &L2_beams.at(i_beam);
+    std::vector<int> beam = L2_beams.at(i_beam);
 
     //sum signals across antennas after shifting each based on beam definition
     for (int i_ant=0;i_ant<n_ant_L2;i_ant++){
-      
-      int beam_delay = beam->at(i_ant);
-      int offset_pos = i_ant * n_samples;
+      int beam_delay = beam.at(i_ant);
 
       //no need to sum for positions ignored due to edge effect
       for (int samp_pos=max_shift;samp_pos<n_samples-max_shift+1;samp_pos++){
-        total_shifted[samp_pos]+= signals_discrete[offset_pos+samp_pos-beam_delay];
+        total_shifted[samp_pos]+= signals_discrete_vector[i_ant][samp_pos-beam_delay];
       }
     }
+    //std::cout<< "\n";
 
     //square so that total_shifted has power:
     for (int samp_pos=max_shift;samp_pos<n_samples-max_shift+1;samp_pos++){
@@ -525,9 +560,9 @@ void pueoSim::pueoTrigger::l2Trigger(int step, int window, int threshold, int ma
 
 
 //object for evaluating thresholds for trigger based on coherent value distribution when no signal present. 
-pueoSim::triggerThreshold::triggerThreshold(float samplingFreqHz_input, int first_antenna) {
+pueoSim::triggerThreshold::triggerThreshold(float samplingFreqHz_input, int first_antenna, float theta_width_L1, float phi_width_L1, float theta_width_L2, float phi_width_L2) {
   window_count = 0;
-  ptrigger = new pueoTrigger(samplingFreqHz_input, (first_antenna+96)%96);  
+  ptrigger = new pueoTrigger(samplingFreqHz_input, (first_antenna+96)%96, theta_width_L1, phi_width_L1, theta_width_L2, phi_width_L2);  
 }
 
 void pueoSim::triggerThreshold::setTriggerScaling(float multiplier) {
@@ -539,7 +574,7 @@ void pueoSim::triggerThreshold::setFir(bool firFilterYes) {
   ptrigger->firFilterOn = firFilterYes;
 }
 
-void pueoSim::triggerThreshold::L1Threshold_addData(int step, int window, int max_shift, std::vector<nicemc::FTPair> input_signals) {
+void pueoSim::triggerThreshold::L1Threshold_addData(int step, int window, int max_shift, int digitize_bits, std::vector<nicemc::FTPair> input_signals) {
 //Evaluation of L1 threshold. For simplicity only 1 beam is generated. In fact it's not a real beam as no delays are applied, but this shouldn't matter for our purposes
 
   ptrigger->newSignal(input_signals);
@@ -547,9 +582,9 @@ void pueoSim::triggerThreshold::L1Threshold_addData(int step, int window, int ma
   //apply fir filter if required
   if (ptrigger->firFilterOn) {
     ptrigger->firFilter_signal_to_fir();
-    ptrigger->digitize_afterFilter(4);
+    ptrigger->digitize_afterFilter(digitize_bits);
   } else {
-    ptrigger->digitize(4);
+    ptrigger->digitize(digitize_bits);
   }
   
   
@@ -562,12 +597,11 @@ void pueoSim::triggerThreshold::L1Threshold_addData(int step, int window, int ma
     std::vector<int> * beam = &ptrigger->L1_beams.at(i_beam);
 
     for (int i_ant=0;i_ant<number_ants;i_ant++){
-
+      TGraph * signal_ant = &ptrigger->signals_discrete.at(i_ant);
       int beam_delay = beam->at(i_ant);
-      int offset_pos = i_ant * n_samples;
-      
+
       for (int samp_pos=max_shift;samp_pos< n_samples - max_shift+1;samp_pos++){
-        total_shifted[samp_pos]+= ptrigger->signals_discrete[offset_pos+samp_pos-beam_delay];
+        total_shifted[samp_pos]+= signal_ant->GetPointY(samp_pos-beam_delay);
       }
     }
 
@@ -589,7 +623,7 @@ void pueoSim::triggerThreshold::L1Threshold_addData(int step, int window, int ma
   }
 }
 
-int pueoSim::triggerThreshold::L1Threshold_eval(double sample_rate) {  
+int pueoSim::triggerThreshold::L1Threshold_eval(double sample_rate, bool diagnosticOn) {  
 
   double stdev =  TMath::StdDev(coherent_values.begin(), coherent_values.end() );
   double mean =  TMath::Mean(coherent_values.begin(), coherent_values.end() );
@@ -601,8 +635,10 @@ int pueoSim::triggerThreshold::L1Threshold_eval(double sample_rate) {
   int num_bins = 100;
   double hist_max =  10 * stdev + mean;
 
-  TCanvas *g1 = new TCanvas("g1","g1",500,500,600,400);
-  g1->cd();
+  if (diagnosticOn) {
+    TCanvas *g1 = new TCanvas("g1","g1",500,500,600,400);
+    g1->cd();
+  }
 
   TH1D * h1 = new TH1D("Histogram for L1","Histogram for L1",num_bins,0.,hist_max);
   for (int i = 0; i < coherent_values.size(); i++) {
@@ -617,32 +653,34 @@ int pueoSim::triggerThreshold::L1Threshold_eval(double sample_rate) {
   TF1 * fitFunc = h1->GetFunction("f1");
   //std::cout << "p0=" << fitFunc->GetParameter(0) << " p1=" << fitFunc->GetParameter(1) ;
   
-  h1->Draw();
-  gPad->SetLogy();
+  if (diagnosticOn) {
+    h1->Draw();
+    gPad->SetLogy();
+
+  }
 
   double sector_rate = 1E6;
   double step = 8;
 
-
+  int l1threshold = round((std::log(sector_rate * step / sample_rate / ptrigger->n_beams_L1 *  window_count * (1 - exp((8 * stdev + mean)/100 *  fitFunc->GetParameter(1)))) - fitFunc->GetParameter(0) ) / fitFunc->GetParameter(1) - hist_max/num_bins/2);
   
-  return round((std::log(sector_rate * step / sample_rate / ptrigger->n_beams_L1 *  window_count * (1 - exp((8 * stdev + mean)/100 *  fitFunc->GetParameter(1)))) - fitFunc->GetParameter(0) ) / fitFunc->GetParameter(1) - hist_max/num_bins/2);
+  return l1threshold;
 
 }
 
 //Adding data for L2. Note that we need to use max_shift as beams are used to shift between antennas in L1
-void  pueoSim::triggerThreshold::L2Threshold_addData(int step, int window, int max_shift, std::vector<nicemc::FTPair> input_signals, int L1Threshold) {
+void  pueoSim::triggerThreshold::L2Threshold_addData(int step, int window, int max_shift, int digitize_bits, std::vector<nicemc::FTPair> input_signals, int L1Threshold) {
   ptrigger->newSignal(input_signals);
   
   if (ptrigger->firFilterOn) {
     ptrigger->firFilter_signal_to_fir();
-    ptrigger->digitize_afterFilter(4);
+    ptrigger->digitize_afterFilter(digitize_bits);
   } else {
-    ptrigger->digitize(4);
+    ptrigger->digitize(digitize_bits);
   }
 
   ptrigger->l1Trigger(step, window, L1Threshold, max_shift);
  
-  
 
   int n_samples = ptrigger->n_samples;
 
@@ -706,6 +744,15 @@ void  pueoSim::triggerThreshold::L2Threshold_addData(int step, int window, int m
 
 */
   
+  //Convert TGraphs into arrays
+
+  int signals_discrete_vector[ptrigger->n_ant_L2][n_samples];
+  for (int i_ant=0;i_ant<ptrigger->n_ant_L2;i_ant++){
+    for (int i_samp=0;i_samp<n_samples;i_samp++){
+      signals_discrete_vector[i_ant][i_samp] = ptrigger->signals_discrete.at(i_ant).GetPointY(i_samp);
+    }
+  }
+
 ///*
   for(int wind_pos=max_shift; wind_pos < n_samples - max_shift-window; wind_pos+=step) {
     if (ptrigger->L1_triggered_windows.at(window_count_this_signal) == true) { //the threshold value is only relevant if L1 triggered 
@@ -715,7 +762,7 @@ void  pueoSim::triggerThreshold::L2Threshold_addData(int step, int window, int m
         for (int samp_pos=0; samp_pos < window ; samp_pos +=1){
           int coherent_sum_sample = 0;
           for (int i_ant=0; i_ant<ptrigger->n_ant_L2; i_ant+=1) {
-            coherent_sum_sample += ptrigger->signals_discrete[i_ant * n_samples + wind_pos+samp_pos-ptrigger->L2_beams.at(i_beam).at(i_ant)];
+            coherent_sum_sample += signals_discrete_vector[i_ant][wind_pos+samp_pos-ptrigger->L2_beams.at(i_beam).at(i_ant)];
           }
           int coherent_sum_sqr_sample = coherent_sum_sample * coherent_sum_sample;
           coherent_sum += coherent_sum_sqr_sample;
@@ -733,7 +780,7 @@ void  pueoSim::triggerThreshold::L2Threshold_addData(int step, int window, int m
 //*/
 }
 
-int  pueoSim::triggerThreshold::L2Threshold_eval(double sample_rate, int step) { 
+int  pueoSim::triggerThreshold::L2Threshold_eval(double sample_rate, int step, bool diagnosticOn) { 
 //Evaluate the distribution of coherent values for windows that have passed L1threshold; specifically, the max coherent value across beams as this is what determines whether that window triggers the L2 sector
 
   //print basic information about coherent values
@@ -742,8 +789,10 @@ int  pueoSim::triggerThreshold::L2Threshold_eval(double sample_rate, int step) {
   double size =  coherent_values.size();
   std::cout << "\nCount = " << size << ", STDeV = " << stdev << ", Mean = " << mean << "\n\n";
 
-  TCanvas *g2 = new TCanvas("g2","g2",500,500,600,400);
-  g2->cd();
+  if (diagnosticOn) {
+    TCanvas *g2 = new TCanvas("g2","g2",500,500,600,400);
+    g2->cd();
+  }
 
   //parameters for fitting histogram
   int num_bins = 100;
@@ -763,13 +812,16 @@ int  pueoSim::triggerThreshold::L2Threshold_eval(double sample_rate, int step) {
 
   //
   double sector_rate = 12;
-  double step_double = step;
-  int l2threshold = round((std::log(sector_rate * step_double / sample_rate *  window_count * (1 - exp(hist_max/num_bins *  fitFunc->GetParameter(1))) ) - fitFunc->GetParameter(0) ) / fitFunc->GetParameter(1) - hist_max/num_bins/2);
+  int l2threshold = round((std::log(sector_rate * step / sample_rate *  window_count * (1 - exp(hist_max/num_bins *  fitFunc->GetParameter(1))) ) - fitFunc->GetParameter(0) ) / fitFunc->GetParameter(1) - hist_max/num_bins/2);
   //std::cout<< "\n" << "L2 threshold " << l2threshold << "\n";
 
-  h1->Draw();
-  gPad->SetLogy();
+  delete h1;
+  delete f1;
 
+  if (diagnosticOn) {
+    h1->Draw();
+    gPad->SetLogy();
+  }
 
   return l2threshold;
 }
