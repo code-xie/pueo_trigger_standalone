@@ -8,7 +8,7 @@
 #include "trigger.h"
 
 //initialise trigger, setup beams
-pueoSim::pueoTrigger::pueoTrigger(float samplingFreqHz_input, int antenna_start, float theta_width_L1, float phi_width_L1, float theta_width_L2, float phi_width_L2){
+pueoSim::pueoTrigger::pueoTrigger(float samplingFreqHz_input, int antenna_start, float theta_width_L1, float phi_width_L1, float theta_width_L2, float phi_width_L2, bool firOn){
 
   samplingFreqHz = samplingFreqHz_input;
   first_antenna = (antenna_start+96)%96;
@@ -19,11 +19,13 @@ pueoSim::pueoTrigger::pueoTrigger(float samplingFreqHz_input, int antenna_start,
   get_beamsL2_simpleSeparation(L2_beams, theta_width_L2, phi_width_L2);
   n_beams_L2 = L2_beams.size();
 
+  firFilterOn = firOn;
+
   ////reenable cout if previously disabled
   //std::cout.clear();
   //std::cout.precision(5);
 
-  std::cout << "\n" <<"pueoTrigger initialised with " <<  n_beams_L1 << " L1 beams, " <<  n_beams_L2 <<" L2 beams" << "\n";
+  std::cout << "\n" <<"pueoTrigger initialised with " <<  n_beams_L1 << " L1 beams, " <<  n_beams_L2 <<" L2 beams, FIR Filter On: " << firFilterOn  << "\n";
 }
 
 //scaling of signal chain before trigger; important given limited bit digitisation
@@ -560,9 +562,9 @@ void pueoSim::pueoTrigger::l2Trigger(int step, int window, int threshold, int ma
 
 
 //object for evaluating thresholds for trigger based on coherent value distribution when no signal present. 
-pueoSim::triggerThreshold::triggerThreshold(float samplingFreqHz_input, int first_antenna, float theta_width_L1, float phi_width_L1, float theta_width_L2, float phi_width_L2) {
+pueoSim::triggerThreshold::triggerThreshold(float samplingFreqHz_input, int first_antenna, float theta_width_L1, float phi_width_L1, float theta_width_L2, float phi_width_L2, bool firFilterYes) {
   window_count = 0;
-  ptrigger = new pueoTrigger(samplingFreqHz_input, (first_antenna+96)%96, theta_width_L1, phi_width_L1, theta_width_L2, phi_width_L2);  
+  ptrigger = new pueoTrigger(samplingFreqHz_input, (first_antenna+96)%96, theta_width_L1, phi_width_L1, theta_width_L2, phi_width_L2, firFilterYes);  
 }
 
 void pueoSim::triggerThreshold::setTriggerScaling(float multiplier) {
@@ -623,7 +625,7 @@ void pueoSim::triggerThreshold::L1Threshold_addData(int step, int window, int ma
   }
 }
 
-int pueoSim::triggerThreshold::L1Threshold_eval(double sample_rate, bool diagnosticOn) {  
+int pueoSim::triggerThreshold::L1Threshold_eval(double sample_rate, int step, bool diagnosticOn) {  
 
   double stdev =  TMath::StdDev(coherent_values.begin(), coherent_values.end() );
   double mean =  TMath::Mean(coherent_values.begin(), coherent_values.end() );
@@ -656,14 +658,18 @@ int pueoSim::triggerThreshold::L1Threshold_eval(double sample_rate, bool diagnos
   if (diagnosticOn) {
     h1->Draw();
     gPad->SetLogy();
-
   }
 
   double sector_rate = 1E6;
-  double step = 8;
+
 
   int l1threshold = round((std::log(sector_rate * step / sample_rate / ptrigger->n_beams_L1 *  window_count * (1 - exp((8 * stdev + mean)/100 *  fitFunc->GetParameter(1)))) - fitFunc->GetParameter(0) ) / fitFunc->GetParameter(1) - hist_max/num_bins/2);
   
+  if (!diagnosticOn) {
+    delete h1;
+    delete f1;
+  }
+
   return l1threshold;
 
 }
@@ -815,12 +821,16 @@ int  pueoSim::triggerThreshold::L2Threshold_eval(double sample_rate, int step, b
   int l2threshold = round((std::log(sector_rate * step / sample_rate *  window_count * (1 - exp(hist_max/num_bins *  fitFunc->GetParameter(1))) ) - fitFunc->GetParameter(0) ) / fitFunc->GetParameter(1) - hist_max/num_bins/2);
   //std::cout<< "\n" << "L2 threshold " << l2threshold << "\n";
 
-  delete h1;
-  delete f1;
+  
 
   if (diagnosticOn) {
     h1->Draw();
     gPad->SetLogy();
+  }
+
+  if (!diagnosticOn) {
+    delete h1;
+   delete f1;
   }
 
   return l2threshold;

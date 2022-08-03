@@ -590,12 +590,14 @@ std::vector<nicemc::FTPair> signal_gen(std::mt19937& gen, double theta_deg, doub
     double * signal = getImpulse(1, 128);
     TGraph * received_signal_pre_interp = new TGraph[16];
     
-  
     
+    std::uniform_real_distribution<> disPosition(-64, 64);
+    
+
     //Create 16 copies of signal, note will be at sample rate of signal provided
     for (int i_ant=0; i_ant < 16; i_ant ++) {
       TGraph * temp_tgraph;
-      temp_tgraph = insert_signal_in_location(signal, 128, n_sample_generated/2, n_sample_generated, 2.949E9);
+      temp_tgraph = insert_signal_in_location(signal, 128, n_sample_generated/2 + (int)disPosition(gen), n_sample_generated, 2.949E9);
       received_signal_pre_interp[i_ant] = *temp_tgraph;
       delete temp_tgraph;
     }
@@ -818,14 +820,14 @@ void testFiterFIR() {
 }
 
 
-void visualiseTrigger(int argc, char **argv, double theta, double phi, int L1_threshold, int L2_threshold, int signal_size, double snr, double sample_rate_hz, int antenna_start, double scaling, float theta_width_L1, float phi_width_L1, float theta_width_L2, float phi_width_L2) {
+void visualiseTrigger(int argc, char **argv, double theta, double phi, int L1_threshold, int L2_threshold, int signal_size, double snr, double sample_rate_hz, int antenna_start, double scaling, float theta_width_L1, float phi_width_L1, float theta_width_L2, float phi_width_L2, bool firFilterYes) {
   TApplication app("app", &argc, argv); //this allows interactive plots for cmake application
 
   std::random_device rd;  // Will be used to obtain a seed for the random number engine
   std::mt19937 gen(rd()); // Standard mersenne_twister_engine seeded with rd()
   
   std::vector<nicemc::FTPair> internally_generated_signal = signal_gen(gen,theta,phi, snr, signal_size, false, sample_rate_hz, antenna_start);
-  pueoSim::pueoTrigger * ptrigger = new pueoSim::pueoTrigger(sample_rate_hz, antenna_start, theta_width_L1, phi_width_L1, theta_width_L2, phi_width_L2);
+  pueoSim::pueoTrigger * ptrigger = new pueoSim::pueoTrigger(sample_rate_hz, antenna_start, theta_width_L1, phi_width_L1, theta_width_L2, phi_width_L2, firFilterYes);
   ptrigger->setScaling(scaling);
   ptrigger->newSignal(internally_generated_signal);
   ptrigger->visualisationOn = true;
@@ -1035,7 +1037,6 @@ int main(int argc, char **argv) {
   bool diagnosticOn = false;
   
 
-
   int l1threshold = -1;
   int l2threshold = -1;
   int beamCount_L1 = -1;
@@ -1043,19 +1044,19 @@ int main(int argc, char **argv) {
 
 
   int repeats_L1 = 1e4;
-  int repeats_L2 = 5e4;
+  int repeats_L2 = 1e5;
   float samplingFreqHz = 2.56E9;
   int antenna_start = 88;
   int signal_size = 512;
   int step = 8;
   int window = 16;
   int edge_size = 64;
-  double scaling = 2.5;
-  bool firFilterYes = false;
+  double scaling = 1.5;
+  bool firFilterYes = true;
   int digitize_bits = 4;
   float theta_width_L1 = 2.0;
   float phi_width_L1 = 10.0;
-  float theta_width_L2 = 2.0;
+  float theta_width_L2 = 1.0;
   float phi_width_L2 = 5.0;
 
   float theta_min = -35.0;
@@ -1063,21 +1064,23 @@ int main(int argc, char **argv) {
   float phi_min = -40.0;
   float phi_max = 20.0;
   
-  float snr_list[11] = {0.4, 0.6, 0.8, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.8};
-  int repeats = 100;
+  float snr_list[9] = {0.6, 0.8, 1.0, 1.1, 1.2, 1.3, 1.4, 1.6, 1.8};
+  int repeats = 1E3;
 
   //Loop of parameter being looped over
-  std::string varyingParam_name = "4beamWidths";
-  float varyingParam[3] = {1, 1.5, 2};
-  float varyingParam1[3] = {5, 10, 20};
-  float varyingParam2[3] = {1, 1.5, 2 };
-  float varyingParam3[3] = {2, 3, 5};
+  std::string varyingParam_name = "FIR_SCALING";
+  double varyingParam[5] = { 2.5, 3, 3.5, 1.5, 2};
+  //float varyingParam1[3] = {0.3, 0.5, 0.7};
+  //float varyingParam2[3] = {1, 1.5, 2 };
+  //float varyingParam3[3] = {2, 3, 5};
   
 
 
   TApplication app("app", &argc, argv); //interactive plots for reviewing threshold eval. Also needs app.Run() later
   std::uniform_real_distribution<> disPhi(theta_min, theta_max);
   std::uniform_real_distribution<> disTheta(phi_min, phi_max);
+  
+
   std::ofstream outputFile;
   std::string outputfilename = "./results/output"+currentDateTime()+"_"+varyingParam_name+".csv";
 
@@ -1094,16 +1097,14 @@ int main(int argc, char **argv) {
   
 
   for (int i = 0; i < sizeof(varyingParam)/sizeof(varyingParam[0]); i++ ) {
-    for (int i1 = 0; i1 < sizeof(varyingParam1)/sizeof(varyingParam1[0]); i1++ ) {
-      for (int i2 = 0; i2 < sizeof(varyingParam2)/sizeof(varyingParam2[0]); i2++ ) {
-        for (int i3 = 0; i3 < sizeof(varyingParam3)/sizeof(varyingParam3[0]); i3++ ) {
+    //for (int i1 = 0; i1 < sizeof(varyingParam1)/sizeof(varyingParam1[0]); i1++ ) {
+  //    for (int i2 = 0; i2 < sizeof(varyingParam2)/sizeof(varyingParam2[0]); i2++ ) {
+  //      for (int i3 = 0; i3 < sizeof(varyingParam3)/sizeof(varyingParam3[0]); i3++ ) {
     
     //change setting
-    theta_width_L1 = varyingParam[i];
-    phi_width_L1 = varyingParam1[i1];
-    theta_width_L2 = varyingParam2[i2];
-    phi_width_L2 =varyingParam3[i3];
-    
+    scaling = varyingParam[i];
+
+
     if (theta_width_L1 < theta_width_L2) {
       continue;
     }
@@ -1120,7 +1121,7 @@ int main(int argc, char **argv) {
 
 
     std::cout<< "\n" << "--L1 threshold evaluation--" << "\n";
-    pueoSim::triggerThreshold * tThresholdL1 = new pueoSim::triggerThreshold(samplingFreqHz, 0, theta_width_L1, phi_width_L1, theta_width_L2, phi_width_L2);
+    pueoSim::triggerThreshold * tThresholdL1 = new pueoSim::triggerThreshold(samplingFreqHz, 0, theta_width_L1, phi_width_L1, theta_width_L2, phi_width_L2, firFilterYes);
     tThresholdL1->setTriggerScaling(scaling);
     tThresholdL1->setFir(firFilterYes);
     for (int r=0; r< repeats_L1 ; r++) {
@@ -1130,7 +1131,7 @@ int main(int argc, char **argv) {
         std::cout << "L1 iteration " << r << " done" << "\n";
       }
     }
-    l1threshold = tThresholdL1->L1Threshold_eval(samplingFreqHz, diagnosticOn);
+    l1threshold = tThresholdL1->L1Threshold_eval(samplingFreqHz, step, diagnosticOn);
     std::cout<< "\n\n" << "L1 threshold set to " << l1threshold << "\n";
     delete tThresholdL1->ptrigger;
     delete tThresholdL1;
@@ -1145,7 +1146,7 @@ int main(int argc, char **argv) {
     //L2 threshold evaluation - should be at least 5E4; slow 
     
     std::cout<< "\n" << "--L2 threshold evaluation--" << "\n";
-    pueoSim::triggerThreshold * tThresholdL2 = new pueoSim::triggerThreshold(samplingFreqHz,0, theta_width_L1, phi_width_L1, theta_width_L2, phi_width_L2);
+    pueoSim::triggerThreshold * tThresholdL2 = new pueoSim::triggerThreshold(samplingFreqHz,0, theta_width_L1, phi_width_L1, theta_width_L2, phi_width_L2, firFilterYes);
     tThresholdL2->setTriggerScaling(scaling);
     tThresholdL2->setFir(firFilterYes);
     for (int r=0; r< repeats_L2 ; r++) {
@@ -1170,7 +1171,7 @@ int main(int argc, char **argv) {
     //Do runs of trigger with the evaluated thresholds, at different SNR
     std::cout<< "\n" << "--Trigger on signals with evaluated threshold--" << "\n";
 
-    pueoSim::pueoTrigger * ptrigger = new pueoSim::pueoTrigger(samplingFreqHz, antenna_start, theta_width_L1, phi_width_L1, theta_width_L2, phi_width_L2);
+    pueoSim::pueoTrigger * ptrigger = new pueoSim::pueoTrigger(samplingFreqHz, antenna_start, theta_width_L1, phi_width_L1, theta_width_L2, phi_width_L2, firFilterYes);
     ptrigger->setScaling(scaling);
 
     beamCount_L1 = ptrigger->n_beams_L1;
@@ -1207,7 +1208,7 @@ int main(int argc, char **argv) {
       
 
       if (diagnosticOn) {
-       visualiseTrigger(argc, argv, disTheta(gen), disPhi(gen), l1threshold, l2threshold, signal_size, snr, samplingFreqHz, antenna_start, scaling, theta_width_L1, phi_width_L1, theta_width_L2, phi_width_L2);
+       //visualiseTrigger(argc, argv, disTheta(gen), disPhi(gen), l1threshold, l2threshold, signal_size, snr, samplingFreqHz, antenna_start, scaling, theta_width_L1, phi_width_L1, theta_width_L2, phi_width_L2, firFilterYes);
       }
     }
 
@@ -1217,14 +1218,17 @@ int main(int argc, char **argv) {
 
     delete ptrigger;
     
+
+  }
+
+
+  //}
+  //}
+  //}
+
     if (diagnosticOn) {
       app.Run(); //interactive plots for reviewing threshold eval
     }
-  }
-  }
-  }
-  }
-
   
 
   return 0;

@@ -34,7 +34,7 @@ namespace pueoSim {
 
   class pueoTrigger {
   public:
-    pueoTrigger(float samplingFreqHz_input, int antenna_start, float theta_width_L1, float phi_width_L1, float theta_width_L2, float phi_width_L2);
+    pueoTrigger(float samplingFreqHz_input, int antenna_start, float theta_width_L1, float phi_width_L1, float theta_width_L2, float phi_width_L2, bool firOn);
 
     static const int n_ant_L1=8;
     static const int n_ant_L2=16;
@@ -88,7 +88,7 @@ namespace pueoSim {
 
   class triggerThreshold {
     public:
-        triggerThreshold(float samplingFreqHz_input, int antenna_start, float theta_width_L1, float phi_width_L1, float theta_width_L2, float phi_width_L2);
+        triggerThreshold(float samplingFreqHz_input, int antenna_start, float theta_width_L1, float phi_width_L1, float theta_width_L2, float phi_width_L2, bool firOn);
 
 
         pueoTrigger * ptrigger;
@@ -99,7 +99,7 @@ namespace pueoSim {
         void setFir(bool firFilterYes);
 
         void L1Threshold_addData(int step, int window, int max_shift, int digitize_bits, std::vector<nicemc::FTPair> input_signals);
-        int L1Threshold_eval(double samplingFreqHz, bool diagnosticOn);
+        int L1Threshold_eval(double samplingFreqHz, int step, bool diagnosticOn);
         void L2Threshold_addData(int step, int window, int max_shift, int digitize_bits, std::vector<nicemc::FTPair> input_signals, int L1Threshold);
         int L2Threshold_eval(double samplingFreqHz, int step, bool diagnosticOn);
   };
